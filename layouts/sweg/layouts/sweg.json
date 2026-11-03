@@ -112,7 +112,7 @@
           "id": "tabs",
           "type": "block",
           "content": {
-            "mod": "tabs"
+            "mod": "sweg-tabs"
           },
           "size": {
             "px": 42
