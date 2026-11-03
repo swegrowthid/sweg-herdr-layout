@@ -4,7 +4,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, layout, settings } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, layout, settings, shared, appHome, readTextFile, nextCommand } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -15,9 +15,53 @@ function find(node, id) {
   return null;
 }
 
+// "workspace_dock" in settings.json: "left" (default) or "right". settings()
+// drops keys Herdr does not know, so the file is read directly. Herdr's own
+// settings saves can drop the key; the menu toggle also stores the pick in
+// shared.json, which is read when the key is missing.
+async function readDock() {
+  try {
+    const raw = await readTextFile(`${appHome()}/settings.json`);
+    const v = raw ? JSON.parse(raw).workspace_dock : null;
+    if (v === "left" || v === "right") return v;
+  } catch {
+    // Fall through to the shared pick.
+  }
+  return shared("workspace.dock") === "right" ? "right" : "left";
+}
+
 export default class Tabs extends View {
-  init() {
+  init(_props, cx) {
     this.pressed = null;
+    this.dock = null;
+    cx.spawn(async (cx) => {
+      for (;;) {
+        if ((await nextCommand()) === "reload_dock") await this.applyDock(cx);
+      }
+    });
+    cx.spawn(async (cx) => this.applyDock(cx));
+    cx.timer.every(2000, (cx) => this.applyDock(cx));
+  }
+
+  // The workspace rail is a root child: right after the sidebar (left) or last (right).
+  async applyDock(cx) {
+    const want = await readDock();
+    if (want === this.dock) return;
+    const tree = JSON.parse(JSON.stringify(layout()));
+    const root = tree;
+    if (!root?.children) return;
+    const ws = root.children.find((c) => c.id === "workspace");
+    if (!ws) return;
+    const rest = root.children.filter((c) => c.id !== "workspace");
+    const at = want === "right" ? rest.length : Math.max(0, rest.findIndex((c) => c.id === "sidebar") + 1);
+    if (root.children.indexOf(ws) === at) {
+      this.dock = want;
+      return;
+    }
+    root.children = [...rest.slice(0, at), ws, ...rest.slice(at)];
+    run("layout.set", { layout: tree });
+    this.dock = want;
+    cx.notify();
   }
 
   render() {
@@ -58,7 +102,7 @@ export default class Tabs extends View {
       .on_mouse_down("left", stop)
       .on_click(() => run("layout.toggle", { id: "workspace" }))
       .child(svg("mods/workspace-chrome/panel-left.svg").size(14))
-      .child("Workspace");
+      .child(div().font_semibold().text_size(13).child("Workspace"));
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
       .on_scroll_wheel(e => { if (Math.abs(e.delta.y) >= 1) run(e.delta.y > 0 ? "tab.prev" : "tab.next"); })

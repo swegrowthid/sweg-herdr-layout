@@ -6,10 +6,15 @@ import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { focused, spaces, panes, terminals, run, theme, home } from "herdr";
 
+// The rail follows the space's repo, not the focused pane (Orca's per-worktree explorer).
+function place(s) {
+  const tabs = new Set((s.tabs ?? []).map(c => c.id));
+  return panes().find(p => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
+}
+
 function location() {
-  const space = spaces().find(s => s.active), f = focused();
-  const pane = f?.pane ? panes().find(p => p.pane === f.pane) : null;
-  return { cwd: pane?.cwd || f?.cwd || space?.folder || null, space };
+  const space = spaces().find(s => s.active);
+  return { cwd: space ? place(space) : null, space };
 }
 
 function basename(path) {

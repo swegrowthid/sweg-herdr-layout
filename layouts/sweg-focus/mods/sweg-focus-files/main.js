@@ -1,13 +1,17 @@
-// A lazy file browser for the focused pane's folder, with bounded read-only previews.
+// A lazy file browser for the active space's repo, with bounded read-only previews.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
-import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, window } from "herdr";
+import { spaces, panes, exec, readTextFile, watchFolder, theme, settings, window } from "herdr";
+
+// The rail follows the space's repo, not the focused pane (Orca's per-worktree explorer).
+function place(s) {
+  const tabs = new Set((s.tabs ?? []).map(c => c.id));
+  return panes().find(p => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
+}
 
 function location() {
-  const space = spaces().find(s => s.active), f = focused();
-  const pane = f?.pane ? panes().find(p => p.pane === f.pane) : null;
-  const on = f?.pane === null ? (f.terminal?.includes("/") ? f.terminal.split("/")[0] : null) : space?.machine ?? null;
-  return { cwd: pane?.cwd || f?.cwd || space?.folder, on, space: space?.id };
+  const space = spaces().find(s => s.active);
+  return { cwd: space ? place(space) : null, on: space?.machine ?? null, space: space?.id };
 }
 const key = () => JSON.stringify(location());
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };

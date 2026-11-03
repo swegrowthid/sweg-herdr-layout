@@ -4,7 +4,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { props, run, theme, layout, nextCommand, openOverlay, spaces, panes, focused, exec } from "herdr";
+import { props, run, theme, layout, nextCommand, openOverlay, spaces, panes, exec, window, settings } from "herdr";
 
 const VIEWS = {
   "ws-files": { label: "Files", icon: "mods/files/folder.svg" },
@@ -26,11 +26,16 @@ function activeView() {
   return find(layout(), "workspace-body")?.active ?? "ws-files";
 }
 
+// The rail follows the space's repo, not the focused pane: switching panes or
+// tabs inside the space must not move the workspace (Orca's per-worktree explorer).
+function place(s) {
+  const tabs = new Set((s.tabs ?? []).map(c => c.id));
+  return panes().find(p => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
+}
+
 function location() {
-  const space = spaces().find(s => s.active), f = focused();
-  const pane = f?.pane ? panes().find(p => p.pane === f.pane) : null;
-  const on = f?.pane === null ? (f.terminal?.includes("/") ? f.terminal.split("/")[0] : null) : space?.machine ?? null;
-  return { cwd: pane?.cwd || f?.cwd || space?.folder, on };
+  const space = spaces().find(s => s.active);
+  return { cwd: space ? place(space) : null, on: space?.machine ?? null };
 }
 
 export default class Panel extends View {
@@ -116,12 +121,20 @@ export default class Panel extends View {
 
   head(t, active, cx) {
     const view = VIEWS[active] ?? VIEWS["ws-files"];
-    return h_flex().size_full().px(10).items_center().bg(t.chrome).rounded(10).border(1).border_color(t.border)
+    const root = layout(), w = window();
+    // Dock left with the sidebar hidden makes the rail the first column: leave
+    // room for the window buttons, like the tab bar does.
+    const first = root?.children?.[0]?.id === "workspace";
+    const lights = first && w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && root?.traffic_lights
+      ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom)
+      : 10;
+    const side = root?.children?.[root.children.length - 1]?.id === "workspace" ? "right" : "left";
+    return h_flex().size_full().px(10).pl(lights).items_center().bg(t.chrome).rounded(10).border(1).border_color(t.border)
       .child(h_flex().id("workspace-title").flex_1().min_w(0).h(28).px(6).gap(7).items_center().rounded(6).cursor_pointer()
         .hover(s => s.bg(t.hover))
         .on_click((_e, cx) => {
           cx.stop_propagation();
-          openOverlay({ mod: "sweg-focus-menu", kind: "popup", width: 272, height: 150, props: { active } });
+          openOverlay({ mod: "sweg-focus-menu", kind: "popup", width: 272, height: 236, props: { active } });
         })
         .child(svg(view.icon).size(14).flex_none().text_color(t.accent))
         .child(div().flex_none().font_semibold().text_size(12.5).child(view.label))
@@ -132,7 +145,7 @@ export default class Panel extends View {
           cx.stop_propagation();
           run("layout.toggle", { id: "workspace" });
         })
-        .child(svg("mods/workspace-chrome/panel-left.svg").size(14)));
+        .child(svg(`mods/workspace-chrome/${side === "right" ? "panel-right" : "panel-left"}.svg`).size(14)));
   }
 
   foot(t) {

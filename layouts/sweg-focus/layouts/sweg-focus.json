@@ -72,6 +72,71 @@
       "resizable": false
     },
     {
+      "id": "workspace",
+      "type": "column",
+      "children": [
+        {
+          "id": "workspace-head",
+          "type": "block",
+          "content": {
+            "mod": "sweg-focus-panel",
+            "props": {
+              "part": "head"
+            }
+          },
+          "size": {
+            "px": 40
+          }
+        },
+        {
+          "id": "workspace-body",
+          "type": "stack",
+          "children": [
+            {
+              "id": "ws-files",
+              "type": "block",
+              "content": {
+                "mod": "sweg-focus-files"
+              }
+            },
+            {
+              "id": "ws-git",
+              "type": "block",
+              "content": {
+                "mod": "sweg-focus-changes"
+              }
+            },
+            {
+              "id": "ws-px0",
+              "type": "block",
+              "content": {
+                "mod": "sweg-focus-px0"
+              }
+            }
+          ],
+          "active": "ws-files"
+        },
+        {
+          "id": "workspace-foot",
+          "type": "block",
+          "content": {
+            "mod": "sweg-focus-panel",
+            "props": {
+              "part": "foot"
+            }
+          },
+          "size": {
+            "px": 28
+          }
+        }
+      ],
+      "size": {
+        "px": 480
+      },
+      "min": 300,
+      "max": 480
+    },
+    {
       "id": "work",
       "type": "column",
       "children": [
@@ -90,71 +155,6 @@
           "id": "work-body",
           "type": "row",
           "children": [
-            {
-              "id": "workspace",
-              "type": "column",
-              "size": {
-                "px": 344
-              },
-              "min": 300,
-              "max": 480,
-              "children": [
-                {
-                  "id": "workspace-head",
-                  "type": "block",
-                  "content": {
-                    "mod": "sweg-focus-panel",
-                    "props": {
-                      "part": "head"
-                    }
-                  },
-                  "size": {
-                    "px": 40
-                  }
-                },
-                {
-                  "id": "workspace-body",
-                  "type": "stack",
-                  "active": "ws-files",
-                  "children": [
-                    {
-                      "id": "ws-files",
-                      "type": "block",
-                      "content": {
-                        "mod": "sweg-focus-files"
-                      }
-                    },
-                    {
-                      "id": "ws-git",
-                      "type": "block",
-                      "content": {
-                        "mod": "sweg-focus-changes"
-                      }
-                    },
-                    {
-                      "id": "ws-px0",
-                      "type": "block",
-                      "content": {
-                        "mod": "sweg-focus-px0"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "id": "workspace-foot",
-                  "type": "block",
-                  "content": {
-                    "mod": "sweg-focus-panel",
-                    "props": {
-                      "part": "foot"
-                    }
-                  },
-                  "size": {
-                    "px": 28
-                  }
-                }
-              ]
-            },
             {
               "id": "main",
               "type": "block",
