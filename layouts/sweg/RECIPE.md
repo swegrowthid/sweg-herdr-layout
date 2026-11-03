@@ -72,9 +72,14 @@ code editor (px0 by default) in a split pane beside the terminal.
   `["Open in <label>", "code-editor", {pane}]` and `choose()` handles that
   command by resolving the target pane's cwd via `panes()`. `menuIcon` maps
   `code-editor` to `file-text.svg`. Adds `settings` and `focused` imports.
+- `mods/sweg-tabs`: clone of `tabs` 0.1.12. One change: the `+`
+  (`tab-new`) button moved inside the `tab-scroll` row, directly after the
+  last tab, so it hugs the tabs instead of sticking to Files/Changes at the
+  far right when few tabs are open. Self asset paths rewritten to
+  `mods/sweg-tabs/` (`win-*.svg`). `sweg.json` `tabs` block points here.
 - `keys.json` snippet: global `"cmd-shift-e": "sweg-pane.open_editor"`.
 - Shipped mods the layout references unchanged: `workspace-chrome`, `spaces`,
-  `agents`, `tabs`, `files`, `changes`, `workspace-status`, `system-stats`.
+  `agents`, `files`, `changes`, `workspace-status`, `system-stats`.
   `sweg-menu` reuses `mods/workspace-chrome/*.svg` icons.
 - Programs run: `px0 <dir> -port 0` (optional external tool,
   https://px0.ai, `go install` or the px0 installer), and whatever argv the
@@ -115,3 +120,5 @@ code editor (px0 by default) in a split pane beside the terminal.
   the sidebar Files panel instead.
 - Right-click on a pane lists "Open in px0" after Zoom and it behaves like
   the button.
+- The tab bar shows the `+` button directly after the last tab, with
+  Files/Changes grouped at the far right.

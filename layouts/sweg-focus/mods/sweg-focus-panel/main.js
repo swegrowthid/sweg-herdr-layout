@@ -1,0 +1,159 @@
+// The workspace card's header and footer for the sweg-focus layout.
+// Header: active view title + switcher + hide. Footer: folder, branch, change counts.
+// Both copies are the same mod; props.part says which one draws.
+
+import { View, div, svg } from "gpui-kit";
+import { h_flex } from "gpui-base";
+import { props, run, theme, layout, nextCommand, openOverlay, spaces, panes, focused, exec } from "herdr";
+
+const VIEWS = {
+  "ws-files": { label: "Files", icon: "mods/files/folder.svg" },
+  "ws-git": { label: "Git", icon: "mods/workspace-chrome/git-branch.svg" },
+  "ws-px0": { label: "px0", icon: "mods/sweg-pane/code.svg" },
+};
+const READ = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.autoRefreshIndex=false"];
+
+function find(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) {
+    const found = find(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function activeView() {
+  return find(layout(), "workspace-body")?.active ?? "ws-files";
+}
+
+function location() {
+  const space = spaces().find(s => s.active), f = focused();
+  const pane = f?.pane ? panes().find(p => p.pane === f.pane) : null;
+  const on = f?.pane === null ? (f.terminal?.includes("/") ? f.terminal.split("/")[0] : null) : space?.machine ?? null;
+  return { cwd: pane?.cwd || f?.cwd || space?.folder, on };
+}
+
+export default class Panel extends View {
+  init(_props, cx) {
+    this.data = { cwd: null, branch: null, count: 0, add: 0, del: 0, repo: null, loading: true };
+    this.context = null;
+    this.busy = false;
+    cx.spawn(async (cx) => {
+      for (;;) {
+        const c = await nextCommand();
+        if (props()?.part !== "head") continue;
+        const child = c === "files" ? "ws-files" : c === "git" ? "ws-git" : c === "px0" ? "ws-px0" : null;
+        if (child) {
+          run("layout.select", { stack: "workspace-body", child });
+          run("layout.show", { id: "workspace" });
+          cx.notify();
+        }
+      }
+    });
+    if (props()?.part !== "head") {
+      this.refresh(cx);
+      cx.timer.every(5000, (cx) => this.refresh(cx));
+    }
+  }
+
+  refresh(cx) {
+    if (find(layout(), "workspace")?.hidden) return;
+    const { cwd, on } = location();
+    // A popup or overlay can take focus and leave no pane; keep the last folder.
+    if (!cwd) return;
+    const next = `${on ?? ""}|${cwd ?? ""}`;
+    if (next !== this.context) {
+      this.context = next;
+      this.data = { cwd, branch: null, count: 0, add: 0, del: 0, repo: null, loading: true };
+    }
+    if (!cwd || this.busy) return;
+    const context = this.context;
+    this.busy = true;
+    cx.spawn(async (cx) => {
+      try {
+        const git = (args) => exec("git", [...READ, ...args], { cwd, on });
+        const top = await git(["rev-parse", "--show-toplevel"]);
+        if (this.context !== context) return;
+        if (top.code !== 0) {
+          this.data = { cwd, branch: null, count: 0, add: 0, del: 0, repo: false, loading: false };
+          return;
+        }
+        const [branch, status, diff] = await Promise.all([
+          git(["rev-parse", "--abbrev-ref", "HEAD"]),
+          git(["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"]),
+          git(["diff", "HEAD", "--numstat", "-z", "--no-renames"]),
+        ]);
+        if (this.context !== context) return;
+        let stat = diff;
+        if (stat.code !== 0) {
+          const [cached, work] = await Promise.all([
+            git(["diff", "--cached", "--numstat", "-z", "--no-renames"]),
+            git(["diff", "--numstat", "-z", "--no-renames"]),
+          ]);
+          stat = { code: 0, stdout: `${cached.stdout ?? ""}${work.stdout ?? ""}` };
+        }
+        let add = 0, del = 0;
+        for (const entry of (stat.stdout ?? "").split("\0")) {
+          if (!entry) continue;
+          const [a, d] = entry.split("\t");
+          add += Number(a) || 0;
+          del += Number(d) || 0;
+        }
+        this.data = {
+          cwd,
+          branch: branch.code === 0 ? branch.stdout.trim() || null : null,
+          count: (status.stdout ?? "").split("\0").filter(Boolean).length,
+          add, del, repo: true, loading: false,
+        };
+      } catch {
+        if (this.context === context) this.data = { cwd, branch: null, count: 0, add: 0, del: 0, repo: false, loading: false };
+      } finally {
+        this.busy = false;
+        cx.notify();
+      }
+    });
+  }
+
+  head(t, active, cx) {
+    const view = VIEWS[active] ?? VIEWS["ws-files"];
+    return h_flex().size_full().px(10).items_center().bg(t.chrome).rounded(10).border(1).border_color(t.border)
+      .child(h_flex().id("workspace-title").flex_1().min_w(0).h(28).px(6).gap(7).items_center().rounded(6).cursor_pointer()
+        .hover(s => s.bg(t.hover))
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          openOverlay({ mod: "sweg-focus-menu", kind: "popup", width: 272, height: 150, props: { active } });
+        })
+        .child(svg(view.icon).size(14).flex_none().text_color(t.accent))
+        .child(div().flex_none().font_semibold().text_size(12.5).child(view.label))
+        .child(svg("mods/workspace-chrome/chevron-down.svg").size(12).flex_none().text_color(t.dim)))
+      .child(h_flex().id("workspace-hide").size(22).flex_none().items_center().justify_center().rounded(5).text_color(t.dim)
+        .hover(s => s.bg(t.hover).text_color(t.foreground))
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          run("layout.toggle", { id: "workspace" });
+        })
+        .child(svg("mods/workspace-chrome/panel-left.svg").size(14)));
+  }
+
+  foot(t) {
+    const d = this.data;
+    const name = d.cwd ? d.cwd.split("/").pop() : "No folder";
+    const changes = d.repo === false ? "No repository" : d.loading ? "…" : d.count === 0 ? "Clean" : `${d.count} change${d.count === 1 ? "" : "s"}`;
+    return h_flex().size_full().px(10).gap(8).items_center().bg(t.chrome).rounded(10).border(1).border_color(t.border).text_size(10.5).text_color(t.dim)
+      .child(svg("mods/workspace-chrome/folder.svg").size(12).flex_none().text_color(t.dim))
+      .child(div().max_w(96).truncate().text_color(t.muted).child(name))
+      .when(Boolean(d.branch), el => el.child(h_flex().h(18).px(5).gap(4).items_center().rounded(4).border(1).border_color(t.border).bg(t.raised).text_size(9.5).text_color(t.muted)
+        .child(svg("mods/workspace-chrome/git-branch.svg").size(10).flex_none())
+        .child(div().max_w(80).truncate().child(d.branch))))
+      .child(div().flex_1())
+      .child(div().text_size(10.5).text_color(d.count ? t.muted : t.dim).child(changes))
+      .when(d.repo !== false && !d.loading && d.add > 0, el => el.child(div().text_size(10.5).text_color(t.ansi2).child(`+${d.add}`)))
+      .when(d.repo !== false && !d.loading && d.del > 0, el => el.child(div().text_size(10.5).text_color(t.ansi1).child(`−${d.del}`)));
+  }
+
+  render(cx) {
+    const t = theme();
+    if (props()?.part === "foot") return this.foot(t);
+    return this.head(t, activeView(), cx);
+  }
+}

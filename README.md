@@ -12,6 +12,7 @@ one, switch to it, or ask your agent to remix it.
 | Layout | Description |
 | ------ | ----------- |
 | [sweg](layouts/sweg/) | `main` remix: Files/Changes panel inside the left sidebar, `</>` button + `cmd-shift-e` + right-click item open the pane's folder in a code editor (px0). |
+| [sweg-focus](layouts/sweg-focus/) | `sweg` remix: Files, Git and px0 in a 344 px workspace card beside the sidebar, one header switcher, `cmd-shift-b` toggle. |
 
 Each layout lives in its own folder, laid out like `~/.config/herdr-app`:
 
