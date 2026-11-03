@@ -11,16 +11,17 @@ one, switch to it, or ask your agent to remix it.
 
 | Layout | Description |
 | ------ | ----------- |
-| —      | Nothing here yet. |
+| [sweg](layouts/sweg/) | `main` remix: Files/Changes panel inside the left sidebar, `</>` button + `cmd-shift-e` + right-click item open the pane's folder in a code editor (px0). |
 
-Each layout lives in its own folder:
+Each layout lives in its own folder, laid out like `~/.config/herdr-app`:
 
 ```
 layouts/<name>/
-├── <name>.json    the layout file
-├── mods/          mods it depends on (optional)
-├── RECIPE.md      the brief another agent could build it from
-└── preview.png    screenshot
+├── layouts/<name>.json   the layout file
+├── mods/<mod>/           mods it adds (cloned and customized)
+├── keys.json             keys it expects (merge, don't replace)
+├── RECIPE.md             the brief another agent could build it from
+└── preview.png           screenshot
 ```
 
 ## Installing a layout
@@ -34,10 +35,15 @@ Fastest way — let your agent do it. Point it at the repo, or at a single layou
 Your agent reads every file first, adds the layout next to yours and switches to
 it. Yours stays as it is.
 
-Manual way — drop the layout file into your config:
+Manual way — copy the layout file and each mod folder into your config, then
+merge the keys snippet:
 
 ```sh
-cp layouts/<name>/<name>.json ~/.config/herdr-app/layouts/
+cp layouts/<name>/layouts/<name>.json ~/.config/herdr-app/layouts/
+cp -R layouts/<name>/mods/* ~/.config/herdr-app/mods/
+# merge layouts/<name>/keys.json into ~/.config/herdr-app/keys.json by hand
+for mod in layouts/<name>/mods/*/; do herdr-app check "$mod"; done
+herdr-app do layout.switch --name <name>
 ```
 
 Herdr picks it up automatically. Switch between layouts with `ctrl-shift-l`.
