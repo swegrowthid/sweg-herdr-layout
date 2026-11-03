@@ -1,10 +1,10 @@
 // Top tab bar for the sweg-focus layout: the shipped tabs, without the old
 // Files/Changes panel buttons. One Workspace button shows and hides the
-// workspace card beside the terminal.
+// workspace rail. The same mod applies the rail's dock side.
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, layout, settings } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, layout, settings, shared, appHome, readTextFile, writeTextFile, nextCommand } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -15,9 +15,74 @@ function find(node, id) {
   return null;
 }
 
+// "workspace_dock": the menu toggle stores the pick in shared.json and it wins.
+// settings.json's key is the seed for a fresh home; Herdr drops unknown keys
+// when it saves that file itself, so it cannot be the runtime truth.
+async function readDock() {
+  const pick = shared("workspace.dock");
+  if (pick === "left" || pick === "right") return pick;
+  try {
+    const raw = await readTextFile(`${appHome()}/settings.json`);
+    const v = raw ? JSON.parse(raw).workspace_dock : null;
+    if (v === "left" || v === "right") return v;
+  } catch {
+    // Keep the default.
+  }
+  return "left";
+}
+
 export default class Tabs extends View {
-  init() {
+  init(_props, cx) {
     this.pressed = null;
+    this.dock = null;
+    cx.spawn(async (cx) => {
+      for (;;) {
+        if ((await nextCommand()) === "reload_dock") await this.applyDock(cx);
+      }
+    });
+    cx.spawn(async (cx) => this.applyDock(cx));
+    cx.timer.every(2000, (cx) => this.applyDock(cx));
+  }
+
+  // The workspace rail is a root child: right after the sidebar (left) or last (right).
+  async applyDock(cx) {
+    const want = await readDock();
+    if (want === this.dock) return;
+    const tree = JSON.parse(JSON.stringify(layout()));
+    const root = tree;
+    if (!root?.children) return;
+    const ws = root.children.find((c) => c.id === "workspace");
+    if (!ws) return;
+    const rest = root.children.filter((c) => c.id !== "workspace");
+    const at = want === "right" ? rest.length : Math.max(0, rest.findIndex((c) => c.id === "sidebar") + 1);
+    if (root.children.indexOf(ws) === at) {
+      this.dock = want;
+      return;
+    }
+    root.children = [...rest.slice(0, at), ws, ...rest.slice(at)];
+    run("layout.set", { layout: tree });
+    this.dock = want;
+    this.syncSettings(want);
+    cx.notify();
+  }
+
+  // Keeps settings.json readable for people who look there. Best effort and
+  // once per value: Herdr may rewrite the file without unknown keys, and a
+  // repeated write would then loop. shared.json stays the truth either way.
+  async syncSettings(side) {
+    if (this.fileFor === side) return;
+    this.fileFor = side;
+    const path = `${appHome()}/settings.json`;
+    try {
+      const raw = await readTextFile(path);
+      if (raw === null) return;
+      const json = JSON.parse(raw);
+      if (json.workspace_dock === side) return;
+      json.workspace_dock = side;
+      await writeTextFile(path, JSON.stringify(json, null, 2) + "\n", raw);
+    } catch {
+      // The app may hold the file; the shared pick still applies.
+    }
   }
 
   render() {
@@ -58,7 +123,7 @@ export default class Tabs extends View {
       .on_mouse_down("left", stop)
       .on_click(() => run("layout.toggle", { id: "workspace" }))
       .child(svg("mods/workspace-chrome/panel-left.svg").size(14))
-      .child("Workspace");
+      .child(div().font_semibold().text_size(13).child("Workspace"));
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
       .on_scroll_wheel(e => { if (Math.abs(e.delta.y) >= 1) run(e.delta.y > 0 ? "tab.prev" : "tab.next"); })
