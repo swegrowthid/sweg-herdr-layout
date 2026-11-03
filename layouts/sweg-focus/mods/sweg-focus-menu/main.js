@@ -1,13 +1,12 @@
 // Switcher popup for the sweg-focus workspace header.
 // props: { active: "ws-files" | "ws-git" | "ws-px0", overlay }
-// Also picks the rail's dock side. settings.json's "workspace_dock" is the
-// preference; Herdr rewrites settings.json from its own struct on some saves
-// (zoom, settings screen) and drops unknown keys, so the pick is also kept in
-// shared.json and read as the fallback.
+// Also picks the rail's dock side. The pick goes to shared.json because the
+// overlay is torn down right after a click, so async file work here never
+// finishes; sweg-focus-tabs applies the move and syncs settings.json.
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { props, run, closeOverlay, theme, layout, shared, setShared, appHome, readTextFile, writeTextFile } from "herdr";
+import { props, run, closeOverlay, theme, layout, setShared } from "herdr";
 
 const ITEMS = [
   { id: "ws-files", label: "Files", desc: "Browse this folder", icon: "mods/files/folder.svg" },
@@ -24,27 +23,6 @@ function dockSide() {
   return root?.children?.[root.children.length - 1]?.id === "workspace" ? "right" : "left";
 }
 
-// Best effort: the app may rewrite settings.json without this key, so
-// shared.json carries the pick and is read when the key is missing.
-async function saveDock(side) {
-  setShared("workspace.dock", side);
-  const path = `${appHome()}/settings.json`;
-  for (let i = 0; i < 2; i++) {
-    const raw = await readTextFile(path);
-    if (raw === null) return;
-    let json;
-    try { json = JSON.parse(raw); } catch { return; }
-    if (json.workspace_dock === side) return;
-    json.workspace_dock = side;
-    try {
-      await writeTextFile(path, JSON.stringify(json, null, 2) + "\n", raw);
-      return;
-    } catch {
-      // The app saved settings at the same moment; read it again and retry once.
-    }
-  }
-}
-
 export default class WorkspaceMenu extends View {
   choose(id) {
     closeOverlay(props().overlay);
@@ -54,7 +32,7 @@ export default class WorkspaceMenu extends View {
 
   dock(side) {
     closeOverlay(props().overlay);
-    saveDock(side).catch(() => {});
+    setShared("workspace.dock", side);
     run("sweg-focus-tabs.reload_dock");
   }
 

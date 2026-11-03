@@ -1,10 +1,10 @@
 // Top tab bar for the sweg-focus layout: the shipped tabs, without the old
 // Files/Changes panel buttons. One Workspace button shows and hides the
-// workspace card beside the terminal.
+// workspace rail. The same mod applies the rail's dock side.
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, layout, settings, shared, appHome, readTextFile, nextCommand } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, layout, settings, shared, appHome, readTextFile, writeTextFile, nextCommand } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -15,19 +15,20 @@ function find(node, id) {
   return null;
 }
 
-// "workspace_dock" in settings.json: "left" (default) or "right". settings()
-// drops keys Herdr does not know, so the file is read directly. Herdr's own
-// settings saves can drop the key; the menu toggle also stores the pick in
-// shared.json, which is read when the key is missing.
+// "workspace_dock": the menu toggle stores the pick in shared.json and it wins.
+// settings.json's key is the seed for a fresh home; Herdr drops unknown keys
+// when it saves that file itself, so it cannot be the runtime truth.
 async function readDock() {
+  const pick = shared("workspace.dock");
+  if (pick === "left" || pick === "right") return pick;
   try {
     const raw = await readTextFile(`${appHome()}/settings.json`);
     const v = raw ? JSON.parse(raw).workspace_dock : null;
     if (v === "left" || v === "right") return v;
   } catch {
-    // Fall through to the shared pick.
+    // Keep the default.
   }
-  return shared("workspace.dock") === "right" ? "right" : "left";
+  return "left";
 }
 
 export default class Tabs extends View {
@@ -61,7 +62,27 @@ export default class Tabs extends View {
     root.children = [...rest.slice(0, at), ws, ...rest.slice(at)];
     run("layout.set", { layout: tree });
     this.dock = want;
+    this.syncSettings(want);
     cx.notify();
+  }
+
+  // Keeps settings.json readable for people who look there. Best effort and
+  // once per value: Herdr may rewrite the file without unknown keys, and a
+  // repeated write would then loop. shared.json stays the truth either way.
+  async syncSettings(side) {
+    if (this.fileFor === side) return;
+    this.fileFor = side;
+    const path = `${appHome()}/settings.json`;
+    try {
+      const raw = await readTextFile(path);
+      if (raw === null) return;
+      const json = JSON.parse(raw);
+      if (json.workspace_dock === side) return;
+      json.workspace_dock = side;
+      await writeTextFile(path, JSON.stringify(json, null, 2) + "\n", raw);
+    } catch {
+      // The app may hold the file; the shared pick still applies.
+    }
   }
 
   render() {

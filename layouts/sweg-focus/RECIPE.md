@@ -29,16 +29,18 @@ repo, not the focused pane, and docks left (default) or right from
 
 ## How it behaves
 
-- Dock side: `settings.json` `"workspace_dock": "left" | "right"` (default
-  left). The rail moves without a restart: `sweg-focus-tabs` reads the file
-  and reorders the layout with `layout.set`.
-- `settings()` drops keys Herdr does not know, so the value is read with
+- Dock side: `shared("workspace.dock")` is the truth; the menu toggle writes
+  it. `settings.json` `"workspace_dock": "left" | "right"` is the seed for a
+  fresh home, read only while the shared key is missing. The rail moves
+  without a restart: `sweg-focus-tabs` reorders the layout with `layout.set`.
+- `settings()` drops keys Herdr does not know, so the file is read with
   `readTextFile(appHome() + "/settings.json")`. Herdr rewrites that file from
-  its own struct on some saves (zoom, settings screen) and drops unknown keys;
-  the menu toggle also stores the pick in `shared("workspace.dock")`, read
-  when the key is missing.
-- The menu's `Left` / `Right` writes both places and runs
-  `sweg-focus-tabs.reload_dock`, so the move is immediate.
+  its own struct on some saves (zoom, settings screen) and drops unknown keys,
+  which is why the shared pick wins. After a move, `sweg-focus-tabs` writes
+  the key back into settings.json once per value, best effort.
+- The menu's `Left` / `Right` writes the shared pick and runs
+  `sweg-focus-tabs.reload_dock`, so the move is immediate; a 2 s timer is the
+  fallback.
 - Workspace content follows the space's repo: the first terminal in the space
   with a live folder, else the space's own folder. Switching panes or tabs
   inside the space does not move the rail (Orca's per-worktree explorer, Zed's
@@ -76,10 +78,10 @@ repo, not the focused pane, and docks left (default) or right from
 - `mods/sweg-focus-tabs`: clone of `tabs` 0.1.12. Drops `shared` panel
   syncing and the Files/Changes buttons; adds the `Workspace` button, the
   `+` inside the tab-scroll row, and the dock logic:
-  `readDock()` (settings.json -> `shared("workspace.dock")` -> `"left"`),
+  `readDock()` (`shared("workspace.dock")` -> settings.json seed -> `"left"`),
   `applyDock()` (clone `layout()`, move the `workspace` node in
-  `root.children`, `run("layout.set", { layout })`), run from `init`, a 2 s
-  `cx.timer`, and the `reload_dock` command.
+  `root.children`, `run("layout.set", { layout })`, then `syncSettings()`),
+  run from `init`, a 2 s `cx.timer`, and the `reload_dock` command.
 - `mods/sweg-focus-panel`: two copies in the layout (`props.part` head/foot).
   Head: title, chevron, hide (icon follows the dock side), popup, plus
   `pl(lightsPadding)` when the rail is the first column so the macOS window
@@ -87,9 +89,9 @@ repo, not the focused pane, and docks left (default) or right from
   git timer. `location()` reads the space repo via `place()`, not the
   focused pane.
 - `mods/sweg-focus-menu`: popup with the three views and the `Dock` row.
-  `saveDock()` calls `setShared("workspace.dock", side)` and best-effort
-  rewrites `settings.json` through `readTextFile` + `writeTextFile(expected)`
-  with one retry, then runs `sweg-focus-tabs.reload_dock`.
+  `dock()` calls `setShared("workspace.dock", side)` then
+  `run("sweg-focus-tabs.reload_dock")`; both are synchronous, because the
+  overlay is torn down right after the click.
 - `mods/sweg-focus-files`, `mods/sweg-focus-changes`: clones of `files` and
   `changes` 0.1.12, headless (no 42 px card header; Files keeps a 34 px
   preview bar). Both use the same space-level `place()` / `location()`.
@@ -111,10 +113,19 @@ repo, not the focused pane, and docks left (default) or right from
   a partial tree loses nodes. `applyDock()` must stay idempotent: it compares
   the node's current index and skips when already in place, or the 2 s timer
   rewrites the layout forever.
+- A popup/overlay mod is torn down as soon as `closeOverlay` runs; async work
+  started in that click (file reads or writes) never resumes. Keep the
+  click handler synchronous and let a persistent mod (`sweg-focus-tabs`) do
+  the async part. This broke the first Dock toggle build.
+- `readDock()` must read `shared("workspace.dock")` first. With settings.json
+  first, a stale `"left"` left in the file shadowed every later shared pick
+  and the toggle looked dead.
+- Every `run("<mod>.<command>")` needs the mod to be loaded and listening;
+  `reload_dock` is best effort, the 2 s timer is the real guarantee.
 - `settings.json` is not a safe store for custom keys: Herdr serializes its
   own `Person` struct back to the file on some saves and drops unknown keys.
-  Read it as a preference, keep `shared("workspace.dock")` as the fallback,
-  and never rely on the key surviving a zoom change.
+  Read it as a seed, keep `shared("workspace.dock")` as the truth, and never
+  rely on the key surviving a zoom change.
 - The app's settings screen (`cmd-,`) is the shipped `frame/settings` mod,
   rewritten on every start. A mod cannot add a row there; the workspace menu
   is the settings UI for this layout.
