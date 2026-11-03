@@ -1,0 +1,9 @@
+{
+  "global": {
+    "cmd-shift-e": "sweg-pane.open_editor",
+    "cmd-shift-b": "layout.toggle:workspace",
+    "cmd-shift-f": "sweg-focus-panel.files",
+    "cmd-shift-g": "sweg-focus-panel.git",
+    "cmd-shift-x": "sweg-focus-panel.px0"
+  }
+}

@@ -5,7 +5,16 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, settings, focused } from "herdr";
+import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, settings, focused, layout } from "herdr";
+
+function find(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) {
+    const found = find(child, id);
+    if (found) return found;
+  }
+  return null;
+}
 
 // "code_editor" in settings.json picks the tool:
 //   "px0" (default): px0 <dir> -port 0 runs in a new pane on the right; its
@@ -16,8 +25,10 @@ import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, 
 function openEditor(cwd, pane) {
   const ed = settings().code_editor ?? "px0";
   if (ed === "builtin") {
-    run("layout.select", { stack: "panel-body", child: "files" });
-    run("layout.show", { id: "panel" });
+    // sweg-focus has a workspace stack; sweg/main keep the sidebar panel.
+    const workspace = find(layout(), "workspace-body");
+    run("layout.select", workspace ? { stack: "workspace-body", child: "ws-files" } : { stack: "panel-body", child: "files" });
+    run("layout.show", { id: workspace ? "workspace" : "panel" });
     return;
   }
   if (Array.isArray(ed)) {
