@@ -1,0 +1,5 @@
+{
+  "global": {
+    "cmd-shift-e": "sweg-pane.open_editor"
+  }
+}
