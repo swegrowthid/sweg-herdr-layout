@@ -4,7 +4,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { props, run, theme, layout, nextCommand, openOverlay, spaces, panes, exec, window, settings } from "herdr";
+import { props, run, theme, layout, nextCommand, openOverlay, spaces, panes, exec, window, settings, shared, setShared } from "herdr";
 
 const VIEWS = {
   "ws-files": { label: "Files", icon: "mods/files/folder.svg" },
@@ -38,6 +38,19 @@ function location() {
   return { cwd: space ? place(space) : null, on: space?.machine ?? null };
 }
 
+// The menu shows one view row per active mode: two for custom, one for px0.
+// Sizes mirror sweg-focus-menu: 42 px view row, 38 px settings row, 30 px dock
+// row, 11 px divider (1 px line with 5 px margins), 19 px label (10 px text
+// line with 3 px bottom), 10 px padding. Herdr adds a 2 px frame around a
+// popup, and 4 px of slack keeps the dock row off the bottom edge.
+const MENU = { view: 42, settings: 38, dock: 30, divider: 11, label: 19, padding: 10, frame: 2, slack: 4 };
+
+function menuHeight() {
+  const views = shared("workspace.mode") === "px0" ? 1 : 2;
+  return MENU.padding + views * MENU.view + MENU.divider * 2 + MENU.settings
+    + MENU.label + MENU.dock + MENU.frame + MENU.slack;
+}
+
 export default class Panel extends View {
   init(_props, cx) {
     this.data = { cwd: null, branch: null, count: 0, add: 0, del: 0, repo: null, loading: true };
@@ -49,8 +62,11 @@ export default class Panel extends View {
         if (props()?.part !== "head") continue;
         const child = c === "files" ? "ws-files" : c === "git" ? "ws-git" : c === "px0" ? "ws-px0" : null;
         if (child) {
+          setShared("workspace.mode", c === "px0" ? "px0" : "custom");
+          if (c !== "px0") setShared("workspace.custom.view", child);
           run("layout.select", { stack: "workspace-body", child });
           run("layout.show", { id: "workspace" });
+          run("sweg-focus-tabs.reload_mode");
           cx.notify();
         }
       }
@@ -134,11 +150,18 @@ export default class Panel extends View {
         .hover(s => s.bg(t.hover))
         .on_click((_e, cx) => {
           cx.stop_propagation();
-          openOverlay({ mod: "sweg-focus-menu", kind: "popup", width: 272, height: 236, props: { active } });
+          openOverlay({ mod: "sweg-focus-menu", kind: "popup", width: 286, height: menuHeight(), props: { active } });
         })
         .child(svg(view.icon).size(14).flex_none().text_color(t.accent))
         .child(div().flex_none().font_semibold().text_size(12.5).child(view.label))
         .child(svg("mods/workspace-chrome/chevron-down.svg").size(12).flex_none().text_color(t.dim)))
+      .child(h_flex().id("workspace-settings").size(22).flex_none().items_center().justify_center().rounded(5).text_color(t.dim)
+        .hover(s => s.bg(t.hover).text_color(t.foreground))
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          run("mod.open", { name: "sweg-focus-settings" });
+        })
+        .child(svg("mods/workspace-chrome/settings.svg").size(13)))
       .child(h_flex().id("workspace-hide").size(22).flex_none().items_center().justify_center().rounded(5).text_color(t.dim)
         .hover(s => s.bg(t.hover).text_color(t.foreground))
         .on_click((_e, cx) => {

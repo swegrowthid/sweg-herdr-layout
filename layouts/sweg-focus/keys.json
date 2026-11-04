@@ -4,6 +4,7 @@
     "cmd-shift-b": "layout.toggle:workspace",
     "cmd-shift-f": "sweg-focus-panel.files",
     "cmd-shift-g": "sweg-focus-panel.git",
-    "cmd-shift-x": "sweg-focus-panel.px0"
+    "cmd-shift-x": "sweg-focus-panel.px0",
+    "cmd-shift-,": "mod.open:sweg-focus-settings"
   }
 }
