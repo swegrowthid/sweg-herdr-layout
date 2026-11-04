@@ -5,7 +5,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, layout, settings, shared, appHome, readTextFile, writeTextFile, nextCommand } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, layout, settings, shared, setShared, appHome, readTextFile, writeTextFile, nextCommand } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -35,6 +35,21 @@ async function pick(settingsFile, key, allowed, fallback) {
   return allowed.includes(seeded) ? seeded : fallback;
 }
 
+const VIEW_ORDER = ["agent", "editor", "review", "zen"];
+
+// The rail's visible state and the sidebar width are enough to name the preset.
+// The active stack child separates Editor from Review.
+function currentView() {
+  const root = layout();
+  const ws = find(root, "workspace");
+  const sidebar = find(root, "sidebar")?.size?.px ?? 268;
+  const body = find(root, "workspace-body")?.active;
+  if (ws?.hidden) return sidebar <= 100 ? "zen" : "agent";
+  if (body === "ws-git") return "review";
+  if (body === "ws-files") return "editor";
+  return "custom";
+}
+
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
@@ -48,6 +63,11 @@ export default class Tabs extends View {
         const command = await nextCommand();
         if (command === "reload_dock") await this.applyDock(cx, await this.settingsFile);
         else if (command === "reload_mode") await this.applyMode(cx, await this.settingsFile);
+        else if (command === "set_view") this.applyView(cx, shared("workspace.view.pending"));
+        else if (command === "next_view") {
+          const at = VIEW_ORDER.indexOf(currentView());
+          this.applyView(cx, VIEW_ORDER[(at + 1 + VIEW_ORDER.length) % VIEW_ORDER.length]);
+        }
       }
     });
     cx.spawn(async (cx) => this.applyState(cx));
@@ -98,6 +118,40 @@ export default class Tabs extends View {
     this.syncSettings("workspace_custom_view", customView);
     if (stack.active !== child) run("layout.select", { stack: "workspace-body", child });
     if (changed) cx.notify();
+  }
+
+  // Layout presets. The rail's visibility, the sidebar width and the active
+  // stack child are the whole state; sweg-settings draws the cards, this
+  // applies them, and cmd-alt-tab cycles them.
+  applyView(cx, id) {
+    if (!VIEW_ORDER.includes(id)) return;
+    const root = layout();
+    const ws = find(root, "workspace");
+    const sidebar = find(root, "sidebar");
+    if (!ws || !sidebar) return;
+    const width = shared("workspace.rail.width") ?? 480;
+    if (id === "zen") {
+      run("layout.hide", { id: "workspace" });
+      run("layout.resize", { id: "sidebar", px: window()?.platform === "macos" ? 76 : 44 });
+      run("layout.resize", { id: "spaces", weight: 1 });
+      run("layout.resize", { id: "agents", weight: 1 });
+    } else if (id === "agent") {
+      run("layout.hide", { id: "workspace" });
+      run("layout.resize", { id: "sidebar", px: 300 });
+      run("layout.resize", { id: "spaces", weight: 1 });
+      run("layout.resize", { id: "agents", weight: 2 });
+    } else {
+      run("layout.show", { id: "workspace" });
+      run("layout.resize", { id: "sidebar", px: 268 });
+      run("layout.resize", { id: "spaces", weight: 1 });
+      run("layout.resize", { id: "agents", weight: 1 });
+      setShared("workspace.mode", "custom");
+      setShared("workspace.custom.view", id === "review" ? "ws-git" : "ws-files");
+      run("layout.select", { stack: "workspace-body", child: id === "review" ? "ws-git" : "ws-files" });
+      run("layout.resize", { id: "workspace", px: width });
+    }
+    setShared("workspace.view", id);
+    cx.notify();
   }
 
   // Keeps settings.json readable for people who look there. Best effort and

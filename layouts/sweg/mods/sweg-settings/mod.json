@@ -1,9 +1,9 @@
 {
   "place": "none",
-  "title": "Workspace settings",
+  "title": "SWEG settings",
   "overlay": {
     "kind": "dialog",
-    "width": 390,
-    "height": 404
+    "width": 720,
+    "height": 520
   }
 }

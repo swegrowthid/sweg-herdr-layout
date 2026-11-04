@@ -5,7 +5,8 @@ card inside the tab area. The rail follows the active space's repo, not the
 focused pane, and docks left (default) or right from `settings.json` or its
 header menu. It has two workspace modes: custom Files and Git panels inside
 the rail, or the px0 editor window outside Herdr. The layout's own settings
-page switches between them.
+page switches between them and picks a view preset (Agent, Editor, Review,
+Zen) that sets the rail, the sidebar width and the active rail panel.
 
 ![sweg](preview.png)
 
@@ -13,7 +14,8 @@ page switches between them.
 
 - Left sidebar, 268 px (`chrome`): brand row (46 px), Spaces and Agents
   sharing the height, footer row (69 px). No Files/Changes panel.
-- Workspace rail, 344 px default (min 300, max 480), a root column: full
+- Workspace rail, 480 px default (min 300, max 480; the settings page offers
+  360, 420 and 480), a root column: full
   window height, from the tab bar's top edge to the bottom. Header 40 px
   (active view icon and label, chevron, settings gear, hide button), content,
   footer 28 px (folder, branch, change counts). It docks right after the
@@ -25,6 +27,10 @@ page switches between them.
   `Dock` row with `Left` and `Right`. Active rows show a check. The gear (or
   `cmd-shift-,`) opens the settings page directly. The popup never lists the
   view rows of the other mode.
+- The layout settings page (`cmd-shift-,` or the gear) is a 720x520 dialog
+  with a left nav: View, Workspace, About. View shows four preset cards with
+  mini previews; Workspace holds mode, px0 window and dock; About holds the
+  versions, Theme & font and Reset.
 - Work column: shipped-style tab bar without Files/Changes buttons, a `+`
   that hugs the last tab, and a `Workspace` button at the right. Terminal pane
   uses `sweg-pane` (`</>` plus split/zoom/close on hover). Status bar
@@ -65,11 +71,29 @@ page switches between them.
   same command. When installed, the px0 view adds a small version line such as
   `px0 0.1.20 · 127.0.0.1:7777`.
 - The layout settings page (`sweg-settings`, overlay dialog) is the
-  settings UI for this layout: workspace mode, px0 window style (browser tab
-  or Chrome app window), and dock side. Herdr's own Settings window only has
-  fixed sections (look, alerts, updates) and no API for mods to add rows, so
-  this page exists. `cmd-shift-,` or the gear opens it. The dialog is 404 px
-  high so the not-installed warning line fits.
+  settings UI for this layout. It has three tabs. View: four preset cards
+  (Agent, Editor, Review, Zen) with mini previews and a rail width control
+  (360, 420, 480). Workspace: mode, px0 window style, dock. About: versions,
+  Theme & font, Reset. Herdr's own Settings window only has fixed sections
+  (look, alerts, updates) and no API for mods to add rows, so this page
+  exists. `cmd-shift-,` or the gear opens View; the header popup's
+  `Workspace settings` row opens Workspace. The dialog is 720x520.
+- View presets: the active preset is computed from the layout. Rail hidden
+  plus sidebar <= 100 px is Zen; rail hidden with a wider sidebar is Agent;
+  rail shown with `ws-git` is Review; rail shown with `ws-files` is Editor.
+  `sweg-tabs.applyView` applies the pick: `layout.hide/show`,
+  `layout.resize` (sidebar, rail, Spaces/Agents weights), `layout.select`,
+  and the shared mode/custom view. The settings cards call
+  `sweg-tabs.set_view` through `workspace.view.pending`.
+- Agent uses a 300 px sidebar and `spaces`/`agents` weights 1:2. Editor and
+  Review use 268 px and weights 1:1, with the rail at the remembered width.
+  Zen uses 76 px on macOS (44 px elsewhere) and hides the rail.
+- `cmd-alt-tab` -> `sweg-tabs.next_view` cycles Agent -> Editor -> Review ->
+  Zen -> Agent. The cycle reads the computed view, so a manual layout change
+  is respected.
+- Rail width: `shared("workspace.rail.width")` is the truth; the View tab
+  writes it and runs `layout.resize {id: "workspace", px}`. The preset apply
+  reuses it when the rail returns.
 - Workspace content follows the space's repo: the first terminal in the space
   with a live folder, else the space's own folder. Switching panes or tabs
   inside the space does not move the rail (Orca's per-worktree explorer, Zed's
@@ -119,8 +143,11 @@ page switches between them.
   `readSettings()` (one settings.json read per launch), `pick()` (shared
   first, settings seed second), `applyDock()`, `applyMode()` (selects
   `ws-px0` for px0 mode or the remembered custom view), run from `init`, a
-  2 s `cx.timer`, and the `reload_dock` / `reload_mode` commands. Shared keys
-  are the truth; `settings.json` keys are written back once per value.
+  2 s `cx.timer`, and the `reload_dock` / `reload_mode` commands. It also
+  owns the view presets: `currentView()` computes the active preset from the
+  layout, `applyView()` applies a preset, and `set_view` / `next_view` serve
+  the settings cards and `cmd-alt-tab`. Shared keys are the truth;
+  `settings.json` keys are written back once per value.
 - `mods/sweg-panel`: two copies in the layout (`props.part` head/foot).
   Head: title, chevron, settings gear, hide (icon follows the dock side),
   popup, plus `pl(lightsPadding)` when the rail is the first column so the
@@ -133,11 +160,16 @@ page switches between them.
   + `reload_mode`; `dock()` writes the shared dock and runs `reload_dock`.
   Both are synchronous, because the overlay is torn down right after the
   click.
-- `mods/sweg-settings`: overlay dialog with workspace mode, px0 window
-  style, and dock. Picks go to shared state, then `reload_mode` /
-  `reload_dock`. It exists because Herdr's Settings window has fixed sections
-  and no mod extension point. On open it runs the px0 `--check` again, so the
-  warning reflects an install done while Herdr was open.
+- `mods/sweg-settings`: the layout's settings dialog. Left nav (View,
+  Workspace, About) plus a content pane. View draws four preset cards with
+  `div()` miniatures and a rail width segmented control; Workspace keeps the
+  mode, px0 window and dock rows; About shows versions, a Theme & font
+  button and Reset. Picks go to shared state; the view cards call
+  `sweg-tabs.set_view` through `workspace.view.pending`, the mode/dock rows
+  call `reload_mode` / `reload_dock`. It exists because Herdr's Settings
+  window has fixed sections and no mod extension point. On open it runs the
+  px0 `--check` again, so the warning reflects an install done while Herdr
+  was open.
 - `mods/sweg-px0`: px0 view + `px0-workspace.py` helper. The helper's
   `--check` prints install/path/version/workbench JSON and never starts a
   workbench. Watches `~/.px0`, has no fast data timer (the old 4 s
@@ -149,7 +181,8 @@ page switches between them.
 - `mods/sweg-pane` / `mods/sweg-terminal-menu`: the same mods as `sweg-sidebar`; the
   `builtin` editor branch checks `workspace-body` first, then `panel-body`.
 - `keys.json` snippet: `cmd-shift-b` toggle, `cmd-shift-f/g/x` mode and
-  views, `cmd-shift-,` settings, `cmd-shift-e` editor. Merge, don't replace.
+  views, `cmd-shift-,` settings, `cmd-shift-e` editor, `cmd-alt-tab` cycles
+  view presets. Merge, don't replace.
 - Shipped mods used: `workspace-chrome`, `spaces`, `agents`,
   `workspace-status`, `system-stats`; icons from `mods/workspace-chrome/*.svg`,
   `mods/files/folder.svg`, `mods/sweg-pane/code.svg`.
@@ -196,9 +229,18 @@ page switches between them.
   `~/.local/bin/px0`. The version call has a 3 s timeout; `--check` uses the
   existing lock read plus ping, so it never starts a workbench. Keep the JSON
   shape stable: the px0 view and settings mod both parse it.
-- The settings dialog is 404 px high. The not-installed warning adds a line;
-  at 384 px the bottom help line was clipped. If you add another settings row,
-  raise the height too.
+- The settings dialog is 720x520 (`mod.json`; the `sweg-menu` `openOverlay`
+  call passes the same size). The View cards are 154 px high; the Workspace
+  and About tabs fit the same height. If you add a row or a fifth card,
+  raise the height in both places.
+- `workspace.view.pending` is a one-shot handshake: the settings card writes
+  it, `sweg-tabs.set_view` reads it. Do not use it as the active state; use
+  the computed `currentView()`.
+- `applyView` must set `workspace.custom.view` before the 2 s `applyMode`
+  timer runs, or the rail snaps back to the previous custom panel.
+- The Agent preset resizes `spaces` to weight 1 and `agents` to weight 2;
+  the other presets reset both to 1. Keep both blocks above their 90 px
+  minimum, or the sidebar list clips.
 - The menu popup height is computed by `sweg-panel`'s `menuHeight()`.
   If you add or remove a view row, update the `MENU` constants, or the dock
   row clips (custom 209 px, px0 167 px).
@@ -233,9 +275,17 @@ page switches between them.
   restart.
 - The menu's `Dock` row moves the rail immediately and updates both
   settings.json and shared.json.
-- The settings page opens from the gear and `cmd-shift-,`, shows the current
-  mode/window/dock, and switching mode changes the rail within ~2 s and
+- The settings page opens from the gear and `cmd-shift-,` on View; the header
+  popup's `Workspace settings` row opens Workspace. The View tab shows four
+  cards and the active card matches the layout. Workspace still shows the
+  current mode/window/dock; switching mode changes the rail within ~2 s and
   survives a layout switch away and back.
+- The View cards apply Agent, Editor, Review and Zen: the rail hides or
+  shows, the sidebar width changes, and the active rail panel is Files or
+  Git. `cmd-alt-tab` cycles the same order and the active card updates.
+- Rail width 360/420/480 applies while the rail is shown and is reused when
+  the rail returns. The About tab opens Herdr Look and Reset returns to
+  Editor at 480.
 - The header popup shows only the active mode's view rows: custom shows
   Files and Git, px0 shows px0; the settings and dock rows stay in both.
 - With px0 installed the px0 view shows a version line and enables the

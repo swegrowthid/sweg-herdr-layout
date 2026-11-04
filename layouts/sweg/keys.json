@@ -5,6 +5,7 @@
     "cmd-shift-f": "sweg-panel.files",
     "cmd-shift-g": "sweg-panel.git",
     "cmd-shift-x": "sweg-panel.px0",
-    "cmd-shift-,": "mod.open:sweg-settings"
+    "cmd-shift-,": "mod.open:sweg-settings",
+    "cmd-alt-tab": "sweg-tabs.next_view"
   }
 }

@@ -12,7 +12,7 @@ tooling to start a new one, and the notes behind the design.
 
 | Layout | What it is |
 | ------ | ---------- |
-| [sweg](layouts/sweg/) | Main SWEG layout. Files, Git and px0 live in a full-height workspace rail beside the terminal. The rail follows the active space's repo, docks left or right, and has two workspace modes: custom Files and Git panels inside the rail, or the px0 editor window outside Herdr. The layout's own settings page (`cmd-shift-,`) picks the mode, the px0 window style and the dock. |
+| [sweg](layouts/sweg/) | Main SWEG layout. Files, Git and px0 live in a full-height workspace rail beside the terminal. The rail follows the active space's repo, docks left or right, and has two workspace modes: custom Files and Git panels inside the rail, or the px0 editor window outside Herdr. The layout's own settings page (`cmd-shift-,`) picks a view preset (Agent, Editor, Review, Zen), the mode, the px0 window style, the rail width and the dock; `cmd-alt-tab` cycles views. |
 | [sweg-sidebar](layouts/sweg-sidebar/) | Older sidebar variant. Herdr's `main` layout with Files and Changes moved inside the left sidebar, plus a `</>` pane button and `cmd-shift-e` that open the pane's folder in px0. |
 
 Each layout folder mirrors the layout part of a Herdr home:

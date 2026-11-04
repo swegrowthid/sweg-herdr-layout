@@ -8,7 +8,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { props, run, closeOverlay, theme, layout, shared, setShared } from "herdr";
+import { props, run, closeOverlay, openOverlay, theme, layout, shared, setShared } from "herdr";
 
 const VIEWS = [
   { id: "ws-files", mode: "custom", label: "Files", desc: "Browse this folder", icon: "mods/files/folder.svg" },
@@ -45,7 +45,7 @@ export default class WorkspaceMenu extends View {
 
   openSettings() {
     closeOverlay(props().overlay);
-    run("mod.open", { name: "sweg-settings" });
+    openOverlay({ mod: "sweg-settings", kind: "dialog", width: 720, height: 520, props: { section: "workspace" } });
   }
 
   dock(side) {
