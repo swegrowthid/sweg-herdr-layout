@@ -1,206 +1,100 @@
-// Context menus (Herdr's items). Opened as a popup with
-// props { tab: "pane" | "tab" | "space" | "global", target }.
-// ↑/↓ move, Enter runs, Esc closes. An item is [label, command, args];
-// a command "worktree" opens the worktree dialog instead.
+// Switcher popup for the sweg workspace header.
+// props: { active: "ws-files" | "ws-git" | "ws-px0", overlay }
+// Picks the workspace mode (custom panels or px0 window), a view for the
+// custom mode, the rail's dock side, and opens the layout's own settings.
+// The view rows follow the active mode: Files and Git for custom, px0 for px0.
+// The pick goes to shared.json because the overlay is torn down right after a
+// click, so async file work here never finishes; sweg-tabs applies it.
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, settings, focused, layout } from "herdr";
+import { props, run, closeOverlay, theme, layout, shared, setShared } from "herdr";
 
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, id);
-    if (found) return found;
-  }
-  return null;
+const VIEWS = [
+  { id: "ws-files", mode: "custom", label: "Files", desc: "Browse this folder", icon: "mods/files/folder.svg" },
+  { id: "ws-git", mode: "custom", label: "Git", desc: "Changes and commit", icon: "mods/workspace-chrome/git-branch.svg" },
+  { id: "ws-px0", mode: "px0", label: "px0", desc: "Editor window for this repo", icon: "mods/sweg-pane/code.svg" },
+];
+const DOCKS = [
+  { id: "left", label: "Left", icon: "mods/workspace-chrome/panel-left.svg" },
+  { id: "right", label: "Right", icon: "mods/workspace-chrome/panel-right.svg" },
+];
+
+function dockSide() {
+  const root = layout();
+  return root?.children?.[root.children.length - 1]?.id === "workspace" ? "right" : "left";
 }
 
-// "code_editor" in settings.json picks the tool:
-//   "px0" (default): px0 <dir> -port 0 runs in a new pane on the right; its
-//                    server opens the browser itself. Close the pane to stop it.
-//   "builtin":       opens the sidebar Files panel instead.
-//   ["cmd", "$dir"]: any external editor argv; $dir is replaced with the
-//                    pane's folder. Launched detached, no pane.
-function openEditor(cwd, pane) {
-  const ed = settings().code_editor ?? "px0";
-  if (ed === "builtin") {
-    // sweg-focus has a workspace stack; sweg/main keep the sidebar panel.
-    const workspace = find(layout(), "workspace-body");
-    run("layout.select", workspace ? { stack: "workspace-body", child: "ws-files" } : { stack: "panel-body", child: "files" });
-    run("layout.show", { id: workspace ? "workspace" : "panel" });
-    return;
-  }
-  if (Array.isArray(ed)) {
-    exec("sh", ["-c", 'nohup "$@" >/dev/null 2>&1 &', "editor", ...ed.map((a) => (a === "$dir" ? cwd : a))]).catch(() => {});
-    return;
-  }
-  // A split pane keeps its source pane's cwd, so match the px0 argv instead.
-  const term = terminals().find((t) => {
-    const a = t.argv ?? [];
-    return a.some((x) => x === "px0" || x.endsWith("/px0")) && a.includes(cwd);
-  });
-  const open = term && panes().find((p) => p.terminal === term.address)?.pane;
-  if (open) {
-    run("pane.focus", { pane: open });
-    return;
-  }
-  run("pane.split", { direction: "right", pane, argv: ["px0", cwd, "-port", "0"] });
+function mode() {
+  return shared("workspace.mode") === "px0" ? "px0" : "custom";
 }
 
-function editorLabel() {
-  const ed = settings().code_editor ?? "px0";
-  if (ed === "builtin") return "Files";
-  if (Array.isArray(ed)) return ed[0].split("/").pop();
-  return "px0";
-}
-
-// Where a space is now: its first terminal's live folder, else where it was made.
-function place(s) {
-  const tabs = new Set((s.tabs ?? []).map((c) => c.id));
-  return panes().find((p) => tabs.has(p.tab) && p.cwd)?.cwd || s.folder;
-}
-
-// A space's checkout: "main" (a repo's own), "linked" (a worktree), or null.
-async function checkout(folder, on) {
-  const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: folder, on });
-  const common = await exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: folder, on });
-  if (top.code !== 0 || common.code !== 0) return null;
-  return common.stdout.trim() === `${top.stdout.trim()}/.git` ? "main" : "linked";
-}
-
-function items(p, git) {
-  p = p ?? {};
-  const tg = p.target ?? {};
-  switch (p.tab) {
-    case "pane": {
-      // A kept sub-agent can go back under its parent, still running.
-      const all = terminals();
-      const term = all.find((t) => t.address === tg.terminal);
-      const parent = term?.parent && all.find((t) => t.address === term.parent);
-      // Once they go to the program, Shift+right-click still opens this menu.
-      const toProgram = term?.labels?.["herdr.right-click"] === "program";
-      return [
-        ["Split right", "pane.split", { direction: "right", pane: tg.pane }],
-        ["Split down", "pane.split", { direction: "down", pane: tg.pane }],
-        ["Zoom", "pane.zoom", { pane: tg.pane }],
-        [`Open in ${editorLabel()}`, "code-editor", { pane: tg.pane }],
-        ...(term
-          ? [
-              toProgram
-                ? ["Use Herdr right-click menu", "terminal.right_click", { terminal: term.address, to: "menu" }]
-                : ["Send right-clicks to pane", "terminal.right_click", { terminal: term.address, to: "program" }],
-            ]
-          : []),
-        ...(parent ? [[`Send back to ${parent.name || parent.address}`, "terminal.park", { terminal: term.address }]] : []),
-        ["Close pane", "pane.close", { pane: tg.pane }],
-      ];
+export default class WorkspaceMenu extends View {
+  choose(item) {
+    closeOverlay(props().overlay);
+    if (item.mode === "px0") {
+      setShared("workspace.mode", "px0");
+    } else {
+      setShared("workspace.mode", "custom");
+      setShared("workspace.custom.view", item.id);
     }
-    case "tab":
-      return [
-        ["Rename", "tab.rename", { id: tg.id }],
-        ["New tab", "tab.new", { space: tg.space }],
-        ["Close", "tab.close", { id: tg.id }],
-      ];
-    case "space":
-      return [
-        ["Rename", "space.rename", { id: tg.id }],
-        ...(git ? [["New worktree", "worktree", { space: tg.id, action: "new" }], ["Open worktree", "worktree", { space: tg.id, action: "open" }]] : []),
-        ...(git === "linked" ? [["Remove worktree", "worktree", { space: tg.id, action: "remove" }]] : []),
-        ["Close", "space.close", { id: tg.id }],
-      ];
-    default:
-      return [
-        ["New space", "space.new", {}],
-        ["Keybinds", "app.help", {}],
-        ["Theme: graphite", "app.theme", { name: "graphite" }],
-        ["Theme: ink", "app.theme", { name: "ink" }],
-        ["Theme: moss", "app.theme", { name: "moss" }],
-        ["Theme: atom one dark", "app.theme", { name: "atom-one-dark" }],
-      ];
-  }
-}
-
-function menuIcon(command) {
-  const name = command.endsWith(".close") ? "x" : command.endsWith(".rename") ? "square-pen" : command.endsWith(".new") ? "plus" : command === "worktree" ? "git-branch" : command === "code-editor" ? "file-text" : command === "app.help" ? "terminal" : command === "app.theme" ? "settings" : command === "pane.split" ? "panel-right" : command === "pane.zoom" ? "square" : "terminal";
-  return `mods/workspace-chrome/${name}.svg`;
-}
-
-// The key bound to a command, for the hint on the right.
-function shortcut(name, args) {
-  // `pane.split:right` binds pane.split with { direction: "right" }.
-  const value = args && Object.values(args)[0];
-  const k = keys().find((b) => b.section === "global" && (b.action === name || b.action === `${name}:${value}`));
-  return k ? k.keys : "";
-}
-
-export default class Menu extends View {
-  init(_props, cx) {
-    this.at = 0;
-    this.git = null;
-    this.handle = cx.focus_handle();
-    this.handle.focus();
-    const p = props();
-    const space = p?.tab === "space" && spaces().find((s) => s.id === p.target?.id);
-    const folder = space && place(space);
-    if (folder)
-      cx.spawn(async (cx) => {
-        this.git = await checkout(folder, space.machine).catch(() => null);
-        cx.notify();
-      });
+    run("layout.select", { stack: "workspace-body", child: item.id });
+    run("layout.show", { id: "workspace" });
+    run("sweg-tabs.reload_mode");
   }
 
-  choose(i, cx) {
-    const it = items(props(), this.git)[i];
-    if (!it) return;
-    closeOverlay(props()?.overlay);
-    if (it[1] === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
-    else if (it[1] === "code-editor") {
-      const cwd = panes().find((p) => p.pane === it[2].pane)?.cwd ?? focused()?.cwd;
-      if (cwd) openEditor(cwd, it[2].pane);
-    }
-    else run(it[1], it[2]);
+  openSettings() {
+    closeOverlay(props().overlay);
+    run("mod.open", { name: "sweg-settings" });
   }
 
-  render(cx) {
+  dock(side) {
+    closeOverlay(props().overlay);
+    setShared("workspace.dock", side);
+    run("sweg-tabs.reload_dock");
+  }
+
+  render() {
     const t = theme();
-    const list = items(props(), this.git);
-    return v_flex()
-      .id("menu")
-      .track_focus(this.handle)
-      .w_full()
-      .min_h(0)
-      .p(5)
-      .bg(t.popover)
-      .text_size(12.8)
-      .on_key_down((e, cx) => {
-        if (e.key === "down") this.at = (this.at + 1) % list.length;
-        else if (e.key === "up") this.at = (this.at + list.length - 1) % list.length;
-        else if (e.key === "enter") this.choose(this.at, cx);
-        else if (e.key === "escape") closeOverlay(props().overlay);
-        else return;
-        cx.notify();
-      })
-      .children(
-        list.map((it, i) =>
-          v_flex()
-            .when(i > 0 && (it[1].endsWith(".close") || it[1] === "app.help" || (it[1] === "app.theme" && list[i - 1][1] !== "app.theme")), el => el.child(div().mx(7).my(4).h(1).bg(t.border)))
-            .child(h_flex()
-            .id(`mi-${i}`)
-            .h(31)
-            .px(8)
-            .gap(9)
-            .rounded(7)
-            .items_center()
-            .justify_between()
-            .text_color(t.foreground)
-            .when(i === this.at, (el) => el.bg(t.selected))
-            .hover((s) => s.bg(t.hover))
-            .on_click((_e, cx) => this.choose(i, cx))
-            .child(svg(menuIcon(it[1])).size(14).flex_none().text_color(t.muted))
-            .child(div().flex_1().child(it[0]))
-            .child(div().text_size(11).text_color(t.dim).child(shortcut(it[1], it[2])))),
-        ),
-      );
+    const active = props()?.active;
+    const activeMode = mode();
+    const side = dockSide();
+    const views = VIEWS.filter((it) => it.mode === activeMode);
+    const row = (it) => {
+      const on = it.mode === "px0" ? activeMode === "px0" : activeMode === "custom" && active === it.id;
+      return h_flex().id(`workspace-menu-${it.id}`).h(42).px(9).gap(10).flex_none().items_center().rounded(7)
+        .when(on, el => el.bg(t.selected))
+        .hover(s => s.bg(t.hover))
+        .on_click(() => this.choose(it))
+        .child(svg(it.icon).size(14).flex_none().text_color(on ? t.accent : t.muted))
+        .child(v_flex().flex_1().min_w(0).gap(1)
+          .child(div().text_size(12).text_color(t.foreground).child(it.label))
+          .child(div().text_size(10).text_color(t.dim).child(it.desc)))
+        .when(on, el => el.child(svg("mods/workspace-chrome/check.svg").size(14).flex_none().text_color(t.accent)));
+    };
+    return v_flex().id("workspace-menu").w_full().min_h(0).p(5).bg(t.popover).text_size(12.8)
+      .children(views.map(row))
+      .child(div().mx(7).my(5).h(1).bg(t.border))
+      .child(h_flex().id("workspace-menu-settings").h(38).px(9).gap(10).flex_none().items_center().rounded(7)
+        .hover(s => s.bg(t.hover))
+        .on_click(() => this.openSettings())
+        .child(svg("mods/workspace-chrome/settings.svg").size(14).flex_none().text_color(t.muted))
+        .child(v_flex().flex_1().min_w(0).gap(1)
+          .child(div().text_size(12).text_color(t.foreground).child("Workspace settings"))
+          .child(div().text_size(10).text_color(t.dim).child("Mode, px0 window, dock")))
+        .child(svg("mods/workspace-chrome/chevron-right.svg").size(12).flex_none().text_color(t.dim)))
+      .child(div().mx(7).my(5).h(1).bg(t.border))
+      .child(div().px(9).pb(3).text_size(10).text_color(t.dim).child("Dock"))
+      .child(h_flex().gap(5)
+        .children(DOCKS.map((d) => {
+          const on = side === d.id;
+          return h_flex().id(`workspace-dock-${d.id}`).flex_1().h(30).px(8).gap(6).items_center().rounded(7)
+            .bg(on ? t.selected : t.chrome).text_color(on ? t.foreground : t.muted)
+            .hover(s => s.bg(t.hover))
+            .on_click(() => this.dock(d.id))
+            .child(svg(d.icon).size(13).flex_none().text_color(on ? t.accent : t.muted))
+            .child(div().text_size(11.5).child(d.label))
+            .when(on, el => el.child(div().flex_1()).child(svg("mods/workspace-chrome/check.svg").size(12).flex_none().text_color(t.accent)));
+        })));
   }
 }
