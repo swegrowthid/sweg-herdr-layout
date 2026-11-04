@@ -1,6 +1,7 @@
 // Top tab bar for the sweg-focus layout: the shipped tabs, without the old
 // Files/Changes panel buttons. One Workspace button shows and hides the
-// workspace rail. The same mod applies the rail's dock side.
+// workspace rail. The same mod applies the rail's dock side and its workspace
+// mode (custom Files/Git panels or the px0 editor window).
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
@@ -15,38 +16,53 @@ function find(node, id) {
   return null;
 }
 
-// "workspace_dock": the menu toggle stores the pick in shared.json and it wins.
-// settings.json's key is the seed for a fresh home; Herdr drops unknown keys
-// when it saves that file itself, so it cannot be the runtime truth.
-async function readDock() {
-  const pick = shared("workspace.dock");
-  if (pick === "left" || pick === "right") return pick;
+// The file is the seed for a fresh home; shared.json is the runtime truth.
+// Herdr drops unknown keys when it rewrites settings.json itself, so a file
+// value is only read while the shared pick is missing. One read per launch.
+async function readSettings() {
   try {
     const raw = await readTextFile(`${appHome()}/settings.json`);
-    const v = raw ? JSON.parse(raw).workspace_dock : null;
-    if (v === "left" || v === "right") return v;
+    return raw ? JSON.parse(raw) : {};
   } catch {
-    // Keep the default.
+    return {};
   }
-  return "left";
+}
+
+async function pick(settingsFile, key, allowed, fallback) {
+  const value = shared(key);
+  if (allowed.includes(value)) return value;
+  const seeded = settingsFile?.[key.replaceAll(".", "_")];
+  return allowed.includes(seeded) ? seeded : fallback;
 }
 
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
     this.dock = null;
+    this.mode = null;
+    this.view = null;
+    this.saved = new Set();
+    this.settingsFile = readSettings();
     cx.spawn(async (cx) => {
       for (;;) {
-        if ((await nextCommand()) === "reload_dock") await this.applyDock(cx);
+        const command = await nextCommand();
+        if (command === "reload_dock") await this.applyDock(cx, await this.settingsFile);
+        else if (command === "reload_mode") await this.applyMode(cx, await this.settingsFile);
       }
     });
-    cx.spawn(async (cx) => this.applyDock(cx));
-    cx.timer.every(2000, (cx) => this.applyDock(cx));
+    cx.spawn(async (cx) => this.applyState(cx));
+    cx.timer.every(2000, (cx) => this.applyState(cx));
+  }
+
+  async applyState(cx) {
+    const settingsFile = await this.settingsFile;
+    await this.applyDock(cx, settingsFile);
+    await this.applyMode(cx, settingsFile);
   }
 
   // The workspace rail is a root child: right after the sidebar (left) or last (right).
-  async applyDock(cx) {
-    const want = await readDock();
+  async applyDock(cx, settingsFile) {
+    const want = await pick(settingsFile, "workspace.dock", ["left", "right"], "left");
     if (want === this.dock) return;
     const tree = JSON.parse(JSON.stringify(layout()));
     const root = tree;
@@ -57,32 +73,53 @@ export default class Tabs extends View {
     const at = want === "right" ? rest.length : Math.max(0, rest.findIndex((c) => c.id === "sidebar") + 1);
     if (root.children.indexOf(ws) === at) {
       this.dock = want;
+      this.syncSettings("workspace_dock", want);
       return;
     }
     root.children = [...rest.slice(0, at), ws, ...rest.slice(at)];
     run("layout.set", { layout: tree });
     this.dock = want;
-    this.syncSettings(want);
+    this.syncSettings("workspace_dock", want);
     cx.notify();
+  }
+
+  // The mode picks which child of the workspace-body stack is shown. Custom
+  // mode remembers the last custom view; px0 mode always shows ws-px0.
+  async applyMode(cx, settingsFile) {
+    const want = await pick(settingsFile, "workspace.mode", ["custom", "px0"], "custom");
+    const customView = await pick(settingsFile, "workspace.custom.view", ["ws-files", "ws-git"], "ws-files");
+    const child = want === "px0" ? "ws-px0" : customView;
+    const stack = find(layout(), "workspace-body");
+    if (!stack) return;
+    const changed = this.mode !== want || this.view !== customView;
+    this.mode = want;
+    this.view = customView;
+    this.syncSettings("workspace_mode", want);
+    this.syncSettings("workspace_custom_view", customView);
+    if (stack.active !== child) run("layout.select", { stack: "workspace-body", child });
+    if (changed) cx.notify();
   }
 
   // Keeps settings.json readable for people who look there. Best effort and
   // once per value: Herdr may rewrite the file without unknown keys, and a
   // repeated write would then loop. shared.json stays the truth either way.
-  async syncSettings(side) {
-    if (this.fileFor === side) return;
-    this.fileFor = side;
+  syncSettings(key, value) {
+    const token = `${key}:${value}`;
+    if (this.saved.has(token)) return;
+    this.saved.add(token);
     const path = `${appHome()}/settings.json`;
-    try {
-      const raw = await readTextFile(path);
-      if (raw === null) return;
-      const json = JSON.parse(raw);
-      if (json.workspace_dock === side) return;
-      json.workspace_dock = side;
-      await writeTextFile(path, JSON.stringify(json, null, 2) + "\n", raw);
-    } catch {
-      // The app may hold the file; the shared pick still applies.
-    }
+    (async () => {
+      try {
+        const raw = await readTextFile(path);
+        if (raw === null) return;
+        const json = JSON.parse(raw);
+        if (json[key] === value) return;
+        json[key] = value;
+        await writeTextFile(path, JSON.stringify(json, null, 2) + "\n", raw);
+      } catch {
+        // The app may hold the file; the shared pick still applies.
+      }
+    })();
   }
 
   render() {

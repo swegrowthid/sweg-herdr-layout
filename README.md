@@ -12,7 +12,7 @@ one, switch to it, or ask your agent to remix it.
 | Layout | Description |
 | ------ | ----------- |
 | [sweg](layouts/sweg/) | `main` remix: Files/Changes panel inside the left sidebar, `</>` button + `cmd-shift-e` + right-click item open the pane's folder in a code editor (px0). |
-| [sweg-focus](layouts/sweg-focus/) | `sweg` remix: Files, Git and px0 as a full-height workspace rail, docked left or right via `workspace_dock`, following the space's repo instead of the focused pane. |
+| [sweg-focus](layouts/sweg-focus/) | `sweg` remix: Files, Git and px0 as a full-height workspace rail, docked left or right via `workspace_dock`, following the space's repo instead of the focused pane. Workspace mode switches between custom Files/Git panels and the px0 editor window (helper + deep link, no browser pane needed); the layout's own settings page (`cmd-shift-,`) holds mode, px0 window style and dock. Detects a missing px0 and shows the install command; the header popup lists only the active mode's views. |
 
 Each layout lives in its own folder, laid out like `~/.config/herdr-app`:
 
