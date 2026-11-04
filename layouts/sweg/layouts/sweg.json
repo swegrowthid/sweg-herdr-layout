@@ -50,39 +50,6 @@
           ]
         },
         {
-          "id": "panel",
-          "type": "column",
-          "children": [
-            {
-              "id": "panel-body",
-              "type": "stack",
-              "children": [
-                {
-                  "id": "files",
-                  "type": "block",
-                  "content": {
-                    "mod": "files"
-                  }
-                },
-                {
-                  "id": "changes",
-                  "type": "block",
-                  "content": {
-                    "mod": "changes"
-                  }
-                }
-              ],
-              "active": "files"
-            }
-          ],
-          "size": {
-            "px": 368
-          },
-          "min": 280,
-          "max": 900,
-          "hidden": true
-        },
-        {
           "id": "sidebar-footer",
           "type": "block",
           "content": {
@@ -103,6 +70,71 @@
       "max": 480,
       "background": "chrome",
       "resizable": false
+    },
+    {
+      "id": "workspace",
+      "type": "column",
+      "children": [
+        {
+          "id": "workspace-head",
+          "type": "block",
+          "content": {
+            "mod": "sweg-panel",
+            "props": {
+              "part": "head"
+            }
+          },
+          "size": {
+            "px": 40
+          }
+        },
+        {
+          "id": "workspace-body",
+          "type": "stack",
+          "children": [
+            {
+              "id": "ws-files",
+              "type": "block",
+              "content": {
+                "mod": "sweg-files"
+              }
+            },
+            {
+              "id": "ws-git",
+              "type": "block",
+              "content": {
+                "mod": "sweg-changes"
+              }
+            },
+            {
+              "id": "ws-px0",
+              "type": "block",
+              "content": {
+                "mod": "sweg-px0"
+              }
+            }
+          ],
+          "active": "ws-files"
+        },
+        {
+          "id": "workspace-foot",
+          "type": "block",
+          "content": {
+            "mod": "sweg-panel",
+            "props": {
+              "part": "foot"
+            }
+          },
+          "size": {
+            "px": 28
+          }
+        }
+      ],
+      "size": {
+        "px": 480
+      },
+      "min": 300,
+      "max": 480
     },
     {
       "id": "work",
@@ -203,5 +235,5 @@
     12,
     16
   ],
-  "terminal_menu": "sweg-menu"
+  "terminal_menu": "sweg-terminal-menu"
 }

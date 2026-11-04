@@ -1,0 +1,5 @@
+{
+  "global": {
+    "cmd-shift-y": "{{slug}}-example.hello"
+  }
+}

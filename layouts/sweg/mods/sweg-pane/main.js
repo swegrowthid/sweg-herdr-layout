@@ -26,7 +26,7 @@ function find(node, id) {
 function openEditor(cwd, pane) {
   const ed = settings().code_editor ?? "px0";
   if (ed === "builtin") {
-    // sweg-focus has a workspace stack; sweg/main keep the sidebar panel.
+    // sweg has a workspace stack; sweg-sidebar keeps the sidebar panel.
     const workspace = find(layout(), "workspace-body");
     run("layout.select", workspace ? { stack: "workspace-body", child: "ws-files" } : { stack: "panel-body", child: "files" });
     run("layout.show", { id: workspace ? "workspace" : "panel" });

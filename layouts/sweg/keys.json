@@ -1,5 +1,10 @@
 {
   "global": {
-    "cmd-shift-e": "sweg-pane.open_editor"
+    "cmd-shift-e": "sweg-pane.open_editor",
+    "cmd-shift-b": "layout.toggle:workspace",
+    "cmd-shift-f": "sweg-panel.files",
+    "cmd-shift-g": "sweg-panel.git",
+    "cmd-shift-x": "sweg-panel.px0",
+    "cmd-shift-,": "mod.open:sweg-settings"
   }
 }

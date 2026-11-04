@@ -1,124 +1,259 @@
 # sweg
 
-Herdr's `main` layout with the side panel moved into the sidebar: Spaces and
-Agents on top, Files and Changes opening inside the left column instead of a
-right column. Pane headers get a `</>` button that opens the pane's folder in a
-code editor (px0 by default) in a split pane beside the terminal.
+Files, Git and px0 as a full-height workspace rail beside the terminal, not a
+card inside the tab area. The rail follows the active space's repo, not the
+focused pane, and docks left (default) or right from `settings.json` or its
+header menu. It has two workspace modes: custom Files and Git panels inside
+the rail, or the px0 editor window outside Herdr. The layout's own settings
+page switches between them.
 
 ![sweg](preview.png)
 
 ## What you see
 
-- Left sidebar, 268 px wide (`chrome` background): brand row (46 px), then the
-  Spaces and Agents lists sharing the height, then the panel area, then the
-  footer row (69 px) with Settings and Add machine.
-- The panel sits inside that sidebar between the lists and the footer. Hidden
-  by default. When Files or Changes is toggled open it shows a file tree or a
-  diff list there, 368 px of the sidebar's height by default, draggable
-  between 280 and 900 px.
-- Main column on the right: tab bar (42 px) with pill tabs, Files and Changes
-  toggle buttons on the right edge. Below it the work area: panes as rounded
-  cards (radius 10, 1 px `border`, `accent` on the focused one, 8 px gap) with
-  a 30 px header each. Bottom: status bar (28 px), workspace info left,
-  `CPU x% MEM y/zG` right.
-- Window look comes from the person's `settings.json` (theme, colors, font);
-  the layout brings no look of its own. Reference build: `graphite` theme,
-  Gruvbox colors, Kode Mono.
+- Left sidebar, 268 px (`chrome`): brand row (46 px), Spaces and Agents
+  sharing the height, footer row (69 px). No Files/Changes panel.
+- Workspace rail, 344 px default (min 300, max 480), a root column: full
+  window height, from the tab bar's top edge to the bottom. Header 40 px
+  (active view icon and label, chevron, settings gear, hide button), content,
+  footer 28 px (folder, branch, change counts). It docks right after the
+  sidebar (left) or as the last column (right).
+- The rail's head/foot draw `bg(chrome)`, `radius` 10 and a 1 px `border`;
+  the content mods paint the chrome background and side borders.
+- Header click opens a popup that follows the active workspace mode: Files and
+  Git rows for `custom`, a px0 row for `px0`, then `Workspace settings` and a
+  `Dock` row with `Left` and `Right`. Active rows show a check. The gear (or
+  `cmd-shift-,`) opens the settings page directly. The popup never lists the
+  view rows of the other mode.
+- Work column: shipped-style tab bar without Files/Changes buttons, a `+`
+  that hugs the last tab, and a `Workspace` button at the right. Terminal pane
+  uses `sweg-pane` (`</>` plus split/zoom/close on hover). Status bar
+  unchanged.
+- Look comes from the person's `settings.json`; reference build is `graphite`
+  with the Gruvbox palette and Kode Mono.
 
 ## How it behaves
 
-- Files / Changes buttons in the tab bar (and `mod.open:files`,
-  `mod.open:changes` keys) reveal the panel inside the sidebar and select the
-  stack child. Clicking the active one hides it again. Per-space choice is
-  remembered by the `tabs` mod (`localStorage` "panels").
-- Pane header hover shows four buttons: `</>` (open editor), split right,
-  split down, zoom, close. Click on the header itself focuses the pane.
-- `</>` button, `cmd-shift-e`, or the right-click menu item "Open in px0":
-  resolves the pane's folder and opens the configured code editor.
-- `settings.json` `"code_editor"` picks the tool:
-  - `"px0"` (default, also used when the key is missing or names another
-    string): runs `pane.split {direction: "right", argv: ["px0", dir,
-    "-port", "0"]}` so the px0 server lives in a visible terminal pane beside
-    the one that triggered it. px0 opens the browser itself; closing the pane
-    stops the server. If a px0 terminal for that folder already exists
-    (matched on `terminals()` argv), its pane is focused instead of opening a
-    duplicate.
-  - `"builtin"`: selects `files` in the `panel-body` stack and shows the
-    `panel` node — the sidebar Files panel.
-  - `["zed", "$dir"]` (any argv array): `$dir` is replaced with the pane's
-    folder and the program is launched detached via `nohup`, no pane.
-- Right-click on a pane shows the shipped `menu` items plus
-  "Open in <editor label>" after Zoom.
-- Agent status in headers is unchanged: spinner while `working`, a
-  `blocked`-colored "Needs you" chip, a `done` dot.
+- Dock side: `shared("workspace.dock")` is the truth; the menu toggle writes
+  it. `settings.json` `"workspace_dock": "left" | "right"` is the seed for a
+  fresh home, read only while the shared key is missing. The rail moves
+  without a restart: `sweg-tabs` reorders the layout with `layout.set`.
+- `settings()` drops keys Herdr does not know, so the file is read with
+  `readTextFile(appHome() + "/settings.json")`. Herdr rewrites that file from
+  its own struct on some saves (zoom, settings screen) and drops unknown keys,
+  which is why the shared pick wins. After a move, `sweg-tabs` writes
+  the key back into settings.json once per value, best effort.
+- The menu's `Left` / `Right` writes the shared pick and runs
+  `sweg-tabs.reload_dock`, so the move is immediate; a 2 s timer is the
+  fallback.
+- Workspace mode: `shared("workspace.mode")` = `"custom"` or `"px0"` is the
+  truth; `"custom"` shows the last custom view (`shared("workspace.custom.view")`,
+  default `"ws-files"`), `"px0"` shows `ws-px0`. The layout settings page and
+  the header popup write it. `settings.json` keys `workspace_mode` and
+  `workspace_custom_view` are seeds for a fresh home only.
+- The header popup lists only the active mode's view rows: Files and Git for
+  custom, px0 for px0. Switching mode happens in the settings page, so the
+  popup never offers a mode it cannot show. Its height is computed by
+  `sweg-panel`'s `menuHeight()` (custom 209 px, px0 167 px).
+- px0 tool check: `sweg-px0` runs `px0-workspace.py --check` once at
+  init and again from `Check again`. The helper reports install state, path,
+  version, and workbench liveness. The result goes to shared keys
+  `px0.installed`, `px0.path`, `px0.version`, `px0.workbench`.
+- When px0 is not installed, the px0 view shows a setup card with the install
+  command (`curl -fsSL https://px0.ai/install.sh | sh`); `Open workspace` and
+  `Split` stay disabled. The settings page marks the px0 mode row red with the
+  same command. When installed, the px0 view adds a small version line such as
+  `px0 0.1.20 · 127.0.0.1:7777`.
+- The layout settings page (`sweg-settings`, overlay dialog) is the
+  settings UI for this layout: workspace mode, px0 window style (browser tab
+  or Chrome app window), and dock side. Herdr's own Settings window only has
+  fixed sections (look, alerts, updates) and no API for mods to add rows, so
+  this page exists. `cmd-shift-,` or the gear opens it. The dialog is 404 px
+  high so the not-installed warning line fits.
+- Workspace content follows the space's repo: the first terminal in the space
+  with a live folder, else the space's own folder. Switching panes or tabs
+  inside the space does not move the rail (Orca's per-worktree explorer, Zed's
+  and VS Code's per-workspace panels). Switching spaces follows.
+- Header click -> `openOverlay` popup (`sweg-menu`). Choose ->
+  `layout.select {stack: "workspace-body", child: "ws-files" | "ws-git" |
+  "ws-px0"}` then `layout.show {id: "workspace"}`.
+- `Workspace` tab-bar button -> `layout.toggle {id: "workspace"}`. The
+  rail header's hide button does the same; its icon flips with the dock side.
+- `cmd-shift-b` -> `layout.toggle:workspace` (the app's own command), works
+  while the rail is hidden because the key does not go through a mod.
+- `cmd-shift-f`, `cmd-shift-g`, `cmd-shift-x` -> `sweg-panel.files`,
+  `.git`, `.px0`. The panel head handles these while the rail is shown. `f`
+  and `g` also set the custom mode and remember the view; `x` sets px0 mode.
+- `cmd-shift-,` -> `mod.open:sweg-settings` opens the layout settings
+  page.
+- `cmd-shift-e` -> `sweg-pane.open_editor` (the px0 button/key on a pane).
+  That one stays pane-based: it opens the focused pane's folder.
+- Files: tree of the space's repo. Click a file for a 34 px preview bar and
+  the read-only editor.
+- Git: changed-file list, diff, commit bar; the footer shows counts and
+  `+add / -del`.
+- px0 view (Option A): install/workbench status from
+  `px0-workspace.py --check`, the space folder, `Open workspace`, and a legacy
+  `Split` fallback. `Open workspace` calls the helper, which discovers or
+  starts the px0 workbench, pre-warms the child workspace for the space's
+  repo, and prints the deep-link URL (`<workbench>/w/<id>/`). The mod then
+  runs `open` on that URL in the default browser, or in a Chrome app window
+  when the settings page picks `App window`. No terminal pane is created.
+  `Split` keeps the old `px0 <dir> -port 0` terminal session as a fallback.
+  If px0 is missing, the view shows a setup card and does not enable the
+  launcher.
+- Footer: branch, status and diff every 5 s with `--no-optional-locks`. A
+  non-repository folder shows `No repository`.
 
 ## Built from
 
-- `layouts/sweg.json`: clone of `main` 0.1.12. Root `row` has two extra
-  properties: `"terminal_menu": "sweg-menu"`, and `pane.header.content.mod`
-  points to `sweg-pane`. The `panel` column (id `panel`, child stack
-  `panel-body` with `files` + `changes` blocks, `hidden: true`, size 368 px,
-  min 280, max 900) moved from `work-body` into `sidebar`, inserted between
-  `sidebar-lists` and `sidebar-footer`. All other nodes and ids are `main`'s.
-- `mods/sweg-pane`: clone of `pane` 0.1.12. Adds `openEditor()` +
-  `editorCwd()` helpers, a `</>` button (own `code.svg`, 16 px stroke 1.3
-  lucide `code` icon) rendered first in the hover button group, and a
-  `cx.spawn` loop on `nextCommand()` for the `open_editor` key command that
-  only acts when `focused().pane` is its own pane. Uses `panes`, `props`,
-  `run`, `theme`, `home`, `settings`, `nextCommand`, `exec`, `focused`,
-  `spaces`, `terminals`.
-- `mods/sweg-menu`: clone of `menu` 0.1.12. Same `openEditor()` helper,
-  plus `editorLabel()` for the item name. The `pane` items list gains
-  `["Open in <label>", "code-editor", {pane}]` and `choose()` handles that
-  command by resolving the target pane's cwd via `panes()`. `menuIcon` maps
-  `code-editor` to `file-text.svg`. Adds `settings` and `focused` imports.
-- `mods/sweg-tabs`: clone of `tabs` 0.1.12. One change: the `+`
-  (`tab-new`) button moved inside the `tab-scroll` row, directly after the
-  last tab, so it hugs the tabs instead of sticking to Files/Changes at the
-  far right when few tabs are open. Self asset paths rewritten to
-  `mods/sweg-tabs/` (`win-*.svg`). `sweg.json` `tabs` block points here.
-- `keys.json` snippet: global `"cmd-shift-e": "sweg-pane.open_editor"`.
-- Shipped mods the layout references unchanged: `workspace-chrome`, `spaces`,
-  `agents`, `files`, `changes`, `workspace-status`, `system-stats`.
-  `sweg-menu` reuses `mods/workspace-chrome/*.svg` icons.
-- Programs run: `px0 <dir> -port 0` (optional external tool,
-  https://px0.ai, `go install` or the px0 installer), and whatever argv the
-  person puts in `code_editor`.
+- `layouts/sweg.json`: clone of `main` 0.1.12. Root `row` children are
+  `sidebar`, `workspace`, `work`. `workspace` (ids `workspace`,
+  `workspace-head`, `workspace-body`, `workspace-foot`; stack children
+  `ws-files`, `ws-git`, `ws-px0`) is a root column, full height. `work` holds
+  `tabs` (`sweg-tabs`), `work-body` with only `main` (`tab: active`,
+  `sweg-pane` header) and `status`. Root `terminal_menu` is `sweg-terminal-menu`.
+- `mods/sweg-tabs`: clone of `tabs` 0.1.12. Drops `shared` panel
+  syncing and the Files/Changes buttons; adds the `Workspace` button, the
+  `+` inside the tab-scroll row, the dock logic, and the workspace mode:
+  `readSettings()` (one settings.json read per launch), `pick()` (shared
+  first, settings seed second), `applyDock()`, `applyMode()` (selects
+  `ws-px0` for px0 mode or the remembered custom view), run from `init`, a
+  2 s `cx.timer`, and the `reload_dock` / `reload_mode` commands. Shared keys
+  are the truth; `settings.json` keys are written back once per value.
+- `mods/sweg-panel`: two copies in the layout (`props.part` head/foot).
+  Head: title, chevron, settings gear, hide (icon follows the dock side),
+  popup, plus `pl(lightsPadding)` when the rail is the first column so the
+  macOS window buttons keep their room. Foot: folder, branch chip, changes
+  and `+/-`, the git timer. `location()` reads the space repo via `place()`,
+  not the focused pane.
+- `mods/sweg-menu`: popup filtered to the active mode's view rows
+  (Files/Git for custom, px0 for px0), a `Workspace settings` row, and the
+  `Dock` row. `choose()` writes the shared mode/view and runs `layout.select`
+  + `reload_mode`; `dock()` writes the shared dock and runs `reload_dock`.
+  Both are synchronous, because the overlay is torn down right after the
+  click.
+- `mods/sweg-settings`: overlay dialog with workspace mode, px0 window
+  style, and dock. Picks go to shared state, then `reload_mode` /
+  `reload_dock`. It exists because Herdr's Settings window has fixed sections
+  and no mod extension point. On open it runs the px0 `--check` again, so the
+  warning reflects an install done while Herdr was open.
+- `mods/sweg-px0`: px0 view + `px0-workspace.py` helper. The helper's
+  `--check` prints install/path/version/workbench JSON and never starts a
+  workbench. Watches `~/.px0`, has no fast data timer (the old 4 s
+  `cx.notify()` was removed); a 15 s fallback refresh runs only while
+  `ws-px0` is the active view.
+- `mods/sweg-files`, `mods/sweg-changes`: clones of `files` and
+  `changes` 0.1.12, headless (no 42 px card header; Files keeps a 34 px
+  preview bar). Both use the same space-level `place()` / `location()`.
+- `mods/sweg-pane` / `mods/sweg-terminal-menu`: the same mods as `sweg-sidebar`; the
+  `builtin` editor branch checks `workspace-body` first, then `panel-body`.
+- `keys.json` snippet: `cmd-shift-b` toggle, `cmd-shift-f/g/x` mode and
+  views, `cmd-shift-,` settings, `cmd-shift-e` editor. Merge, don't replace.
+- Shipped mods used: `workspace-chrome`, `spaces`, `agents`,
+  `workspace-status`, `system-stats`; icons from `mods/workspace-chrome/*.svg`,
+  `mods/files/folder.svg`, `mods/sweg-pane/code.svg`.
+- Programs: `px0` (https://px0.ai) and `python3` (for the workspace helper).
 
 ## Watch out
 
-- Keep the ids `panel`, `panel-body`, `files`, `changes` exactly: the `tabs`
-  mod finds them by id in the layout tree; renaming breaks the toggles.
-- The panel lives inside the sidebar's fixed 268 px column (`resizable:
-  false`), so the panel is tall and narrow, not wide like before. Its `size`
-  {px} is vertical height here, not width.
-- `pane.split` argv terminals inherit the source pane's cwd; the px0 dedup
-  must match `terminals()` argv, not pane cwd.
-- Every `sweg-pane` copy runs the `nextCommand()` loop; only the copy whose
-  `props().pane` equals `focused().pane` may act or each pane spawns its own
-  split.
-- `px0` must be on PATH for the default editor. Without it the new pane shows
-  a shell error. `code_editor: "builtin"` needs nothing external.
-- Herdr 0.1.12 has no in-app browser pane; px0's UI opens in the system
-  browser. Newer Herdr builds with `browser open` could host it inside.
-- Installing on a home that already has `sweg-pane`/`sweg-menu` folders or a
-  `sweg.json` layout needs renames (folder names and the `mod` values in
-  `sweg.json`) per the shared-layout rules.
+- `layout.set` replaces the whole tree of a personal layout and persists it to
+  `layouts/<name>.json`. Always pass the full `layout()` tree (deep-cloned);
+  a partial tree loses nodes. `applyDock()` must stay idempotent: it compares
+  the node's current index and skips when already in place, or the 2 s timer
+  rewrites the layout forever.
+- A popup/overlay mod is torn down as soon as `closeOverlay` runs; async work
+  started in that click (file reads or writes) never resumes. Keep the
+  click handler synchronous and let a persistent mod (`sweg-tabs`) do
+  the async part. This broke the first Dock toggle build.
+- `readDock()` must read `shared("workspace.dock")` first. With settings.json
+  first, a stale `"left"` left in the file shadowed every later shared pick
+  and the toggle looked dead.
+- Every `run("<mod>.<command>")` needs the mod to be loaded and listening;
+  `reload_dock` is best effort, the 2 s timer is the real guarantee.
+- `settings.json` is not a safe store for custom keys: Herdr serializes its
+  own `Person` struct back to the file on some saves and drops unknown keys.
+  Read it as a seed, keep `shared("workspace.dock")` / `shared("workspace.mode")`
+  as the truth, and never rely on the key surviving a zoom change.
+- The app's settings screen (`cmd-,`) is the shipped `frame/settings` mod,
+  rewritten on every start. A mod cannot add a row there: `app.settings` only
+  accepts `look`, `alerts`, `updates`. The layout's own settings page
+  (`sweg-settings`) is the settings UI for this layout.
+- `applyMode()` must only call `layout.select`; calling `layout.show` there
+  would unhide a rail the person hid on purpose. The menu may show it.
+- The px0 helper writes nothing under `.git`; it uses the px0 workbench API.
+  `POST /api/wb/open` needs `Origin` equal to the workbench host and is
+  loopback-only. Compute the workspace id from `realpath`, or a symlinked
+  path (for example `/tmp` vs `/private/tmp`) starts a second workspace.
+- The deep link (`<workbench>/w/<id>/`) is read when the page loads. Pre-warm
+  the child first (the helper does), or a cold child answers with a holding
+  page and the workspace does not open. The URL opens a new browser tab or
+  app window; no automation is used to focus an existing one.
+- `open -na "Google Chrome" --args --app=<url>` looks like a standalone
+  editor window but creates a new app window per call; that is why the
+  default stays `Browser tab`.
+- Install detection lives in the helper: `shutil.which("px0")` first, then
+  `~/.local/bin/px0`. The version call has a 3 s timeout; `--check` uses the
+  existing lock read plus ping, so it never starts a workbench. Keep the JSON
+  shape stable: the px0 view and settings mod both parse it.
+- The settings dialog is 404 px high. The not-installed warning adds a line;
+  at 384 px the bottom help line was clipped. If you add another settings row,
+  raise the height too.
+- The menu popup height is computed by `sweg-panel`'s `menuHeight()`.
+  If you add or remove a view row, update the `MENU` constants, or the dock
+  row clips (custom 209 px, px0 167 px).
+- Editing `px0-workspace.py` does not reload the px0 mod. Touch
+  `sweg-px0/main.js` (or reopen the settings page) to re-run the check
+  after a helper change.
+- Keep the ids `workspace`, `workspace-head`, `workspace-body`,
+  `workspace-foot`, `ws-files`, `ws-git`, `ws-px0`. The head, menu, tabs mod
+  and keys find them by id. `layout.toggle:workspace` uses the node id.
+- Dock left with the sidebar hidden makes the rail the first column: the head
+  must keep the traffic-light padding or the macOS window buttons sit over
+  the title. The tab bar computes its own padding the same way.
+- The head and foot are the same mod; only the head handles view keys, the
+  foot runs the git timer. Both copies consume `nextCommand`.
+- View keys only work while the rail is shown; `cmd-shift-b` and the tab-bar
+  button work always because they are app commands.
+- px0 is started with `-port 0`; the argv port is `0`. Sessions are matched
+  by argv, not cwd, because a split pane inherits the source pane's cwd.
+- The footer's git reads use `--no-optional-locks` and
+  `core.fsmonitor=false`; keep them so the folder watch and status do not
+  fight.
+- Herdr 0.1.12 has no browser pane; the px0 tab stays a launcher and px0
+  opens the system browser.
 
 ## Done when
 
-- `herdr-app check` passes on `mods/sweg-pane` and `mods/sweg-menu`.
-- `layout.switch {name: "sweg"}` shows the window with no `layout.error`
-  file: sidebar lists on top, footer at the bottom of the sidebar, no
-  right-hand panel column.
-- Clicking Files in the tab bar opens the file tree inside the sidebar;
-  clicking again hides it; Changes works the same.
-- Hovering a pane header shows the `</>` button before the split buttons.
-- `cmd-shift-e` on a focused terminal splits a pane to the right running
-  `px0 <that pane's folder> -port 0`; a second press focuses it again.
-- `"code_editor": "builtin"` in settings.json makes the same triggers open
-  the sidebar Files panel instead.
-- Right-click on a pane lists "Open in px0" after Zoom and it behaves like
-  the button.
-- The tab bar shows the `+` button directly after the last tab, with
-  Files/Changes grouped at the far right.
+- `herdr-app check` passes on every mod in `mods/`.
+- `layout.switch {name: "sweg"}` shows no `layout.error`: sidebar,
+  full-height workspace rail, terminal, status bar.
+- With `"workspace_dock": "left"` the rail sits between sidebar and terminal;
+  with `"right"` it is the last column; the move happens within ~2 s with no
+  restart.
+- The menu's `Dock` row moves the rail immediately and updates both
+  settings.json and shared.json.
+- The settings page opens from the gear and `cmd-shift-,`, shows the current
+  mode/window/dock, and switching mode changes the rail within ~2 s and
+  survives a layout switch away and back.
+- The header popup shows only the active mode's view rows: custom shows
+  Files and Git, px0 shows px0; the settings and dock rows stay in both.
+- With px0 installed the px0 view shows a version line and enables the
+  launcher. With px0 missing (or `PATH` and `HOME` hidden in a simulation) the
+  view shows the setup card and install command, the settings page marks the
+  px0 mode row red, and the dialog bottom line is not clipped.
+- `Check again` flips the view between the setup card and the launcher after
+  px0 is installed or hidden, without a restart.
+- px0 mode shows the px0 view with workbench status and `Open workspace`;
+  the helper prints one URL for the space repo and the same repo reuses one
+  workspace child. `Split` still starts the legacy terminal session.
+- The px0 view keeps no 4 s notify timer; its fallback refresh runs only
+  while `ws-px0` is the active view.
+- Focusing another pane or opening a tab in a different folder does not
+  change the rail's folder; switching spaces does.
+- `cmd-shift-b` and the tab-bar `Workspace` button hide and show the rail.
+- `cmd-shift-f`, `cmd-shift-g`, `cmd-shift-x` switch views and mode while the
+  rail is shown.
+- Files opens a file and returns with the back arrow; Git lists changes,
+  shows a diff and can commit.
+- `preview.png` is a screenshot of the live layout.
