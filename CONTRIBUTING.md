@@ -14,9 +14,9 @@ layouts/
     keys.json             keys snippet to merge
     RECIPE.md             the brief another agent can rebuild it from
     preview.png           screenshot
-  _template/              starting point for a new layout
-  sweg/                   main layout
-  sweg-sidebar/           older sidebar variant
+  sweg/                   main layout, the only published one
+templates/
+  layout/                 starting point for a new layout, not published
 scripts/
   new-layout.py           generator: template -> layouts/<slug>/
 docs/                     research notes, not part of a layout
@@ -32,13 +32,11 @@ files outside its own folder except the shipped Herdr mods and the files its
 - Layout slug: kebab-case, matches the folder and the layout file. Rules:
   `^[a-z][a-z0-9-]{1,31}$`. Example: `sweg` lives in `layouts/sweg/` with the
   layout at `layouts/sweg/layouts/sweg.json`.
-- Main layout is `sweg`. The older sidebar layout is `sweg-sidebar`, at
-  `layouts/sweg-sidebar/layouts/sweg-sidebar.json`.
+- Main layout is `sweg`. Only `sweg` is published. A retired layout leaves
+  `layouts/` entirely; git history keeps it.
 - A layout's own mods are named `<layout>-<role>`, for example `<layout>-panel`,
   `<layout>-tabs`, `<layout>-menu`, `<layout>-settings`. Roles are short nouns.
-  For `sweg` this gives `sweg-panel`, `sweg-tabs`, `sweg-menu`, `sweg-settings`;
-  the sidebar layout uses `sweg-sidebar-pane`, `sweg-sidebar-menu`,
-  `sweg-sidebar-tabs`.
+  For `sweg` this gives `sweg-panel`, `sweg-tabs`, `sweg-menu`, `sweg-settings`.
 - The mod folder name is the mod name and the `content.mod` value. One mod per
   folder, one idea per mod. A role that needs two drawing modes is still one
   mod with `props` (see `sweg-panel`).
@@ -56,22 +54,26 @@ From the repo root:
 python3 scripts/new-layout.py my-layout
 ```
 
-The generator validates the slug, copies `layouts/_template/` to
-`layouts/my-layout/`, replaces the template placeholder in file contents and in
-file and folder names, and prints the next steps. It refuses an invalid slug
-and a folder that already exists.
+The generator validates the slug, copies `templates/layout/` to
+`layouts/<slug>/`, puts `layout.json` at
+`layouts/<slug>/layouts/<slug>.json`, replaces the template placeholder in
+file contents and in file and folder names, and prints the next steps. It
+refuses an invalid slug and a folder that already exists.
 
 The template has:
 
-- `layouts/<slug>.json`: a root row with one example mod block and one
-  active-tab terminal block, `titlebar: none` and `background: canvas`.
-- `mods/<slug>-example/`: `main.js` and `mod.json`, a small self-contained mod.
+- `layout.json`: a root row with one example mod block and one active-tab
+  terminal block, `titlebar: none` and `background: canvas`. The generator
+  puts it at `layouts/<slug>/layouts/<slug>.json`.
+- `mods/{{slug}}-example/`: `main.js` and `mod.json`, a small self-contained mod.
 - `keys.json`: one key binding to a mod command.
 - `README.md`: the per-folder instructions.
 - `RECIPE.md`: the brief to fill in.
 
-To copy by hand: `cp -R layouts/_template layouts/<slug>`, rename `<slug>.json`
-and `<slug>-example/`, then replace the placeholder in every file.
+To copy by hand: `cp -R templates/layout layouts/<slug>`, make
+`layouts/<slug>/layouts/`, move `layout.json` to
+`layouts/<slug>/layouts/<slug>.json`, rename the mod folder, then replace the
+placeholder in every file.
 
 Then:
 
@@ -141,12 +143,34 @@ app it targets:
   layouts under `~/.config/herdr-app/layouts/` and the guide in its `AGENTS.md`.
 - Note the tested Herdr version in `RECIPE.md` when it matters.
 
+## What the gallery publishes
+
+Herdr finds a shared layout through the repo topic `herdr-layout`, then lists
+every `<folder>/layouts/<name>.json` file in the repo. Each match becomes one
+card, named after the JSON file. Text in `README.md` or `docs/` does not add
+a card; only that path does.
+
+Keep the template and retired layouts out of that path:
+
+- The template keeps its tree as `templates/layout/layout.json`. The generator
+  puts it at `layouts/<slug>/layouts/<slug>.json` for a real layout.
+- A retired layout leaves `layouts/` entirely.
+
+Check before you push:
+
+```sh
+git ls-files | grep -E '(^|/)layouts/[^/]+\.json$'
+```
+
+The output must name only the layouts you mean to publish.
+
 ## Pull requests
 
 1. Branch from `main` and add one layout or one focused change.
 2. Run the verification checklist above.
-3. Commit layout sources only: layout JSON, mod sources and assets, `keys.json`,
+3. Check the gallery path list above; only published layouts may match it.
+4. Commit layout sources only: layout JSON, mod sources and assets, `keys.json`,
    `RECIPE.md`, `preview.png`. No generated files, no live config, no state.
-4. Open a PR with what the layout looks like, what is new or changed, the
+5. Open a PR with what the layout looks like, what is new or changed, the
    Herdr version tested, and a screenshot. Keep it small; one layout per PR
    when you can.

@@ -178,8 +178,9 @@ Zen) that sets the rail, the sidebar width and the active rail panel.
 - `mods/sweg-files`, `mods/sweg-changes`: clones of `files` and
   `changes` 0.1.12, headless (no 42 px card header; Files keeps a 34 px
   preview bar). Both use the same space-level `place()` / `location()`.
-- `mods/sweg-pane` / `mods/sweg-terminal-menu`: the same mods as `sweg-sidebar`; the
-  `builtin` editor branch checks `workspace-body` first, then `panel-body`.
+- `mods/sweg-pane` / `mods/sweg-terminal-menu`: clones of `pane` and `menu`,
+  first written for the earlier sidebar build. The `builtin` editor branch
+  checks `workspace-body` first, then `panel-body`.
 - `keys.json` snippet: `cmd-shift-b` toggle, `cmd-shift-f/g/x` mode and
   views, `cmd-shift-,` settings, `cmd-shift-e` editor, `cmd-alt-tab` cycles
   view presets. Merge, don't replace.

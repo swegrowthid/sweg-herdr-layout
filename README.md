@@ -1,10 +1,10 @@
 # SWEG layouts for Herdr
 
-SWEG is a set of custom window layouts for [Herdr](https://herdr.dev), the
-desktop app for terminals and coding agents. Herdr keeps its whole interface
-as plain files in `~/.config/herdr-app`, so a layout is a folder of JSON and
-mods that you copy in and switch to. This repo holds those folders, the
-tooling to start a new one, and the notes behind the design.
+SWEG is a custom window layout for [Herdr](https://herdr.dev), the desktop
+app for terminals and coding agents. Herdr keeps its whole interface as
+plain files in `~/.config/herdr-app`, so a layout is a folder of JSON and
+mods that you copy in and switch to. This repo holds the layout, the tooling
+to start a new one, and the notes behind the design.
 
 ![sweg](layouts/sweg/preview.png)
 
@@ -13,7 +13,17 @@ tooling to start a new one, and the notes behind the design.
 | Layout | What it is |
 | ------ | ---------- |
 | [sweg](layouts/sweg/) | Main SWEG layout. Files, Git and px0 live in a full-height workspace rail beside the terminal. The rail follows the active space's repo, docks left or right, and has two workspace modes: custom Files and Git panels inside the rail, or the px0 editor window outside Herdr. The layout's own settings page (`cmd-shift-,`) picks a view preset (Agent, Editor, Review, Zen), the mode, the px0 window style, the rail width and the dock; `cmd-alt-tab` cycles views. |
-| [sweg-sidebar](layouts/sweg-sidebar/) | Older sidebar variant. Herdr's `main` layout with Files and Changes moved inside the left sidebar, plus a `</>` pane button and `cmd-shift-e` that open the pane's folder in px0. |
+
+`sweg` is the only published layout. The Herdr gallery adds one card per
+`<folder>/layouts/<name>.json` in the repo, so unused folders must stay out
+of that path. The template keeps its tree as `templates/layout/layout.json`
+for that reason. Check before you push:
+
+```sh
+git ls-files | grep -E '(^|/)layouts/[^/]+\.json$'
+```
+
+The output must name only the layouts you mean to publish.
 
 Each layout folder mirrors the layout part of a Herdr home:
 
@@ -52,11 +62,12 @@ From the repo root:
 python3 scripts/new-layout.py my-layout
 ```
 
-The generator copies [layouts/_template/](layouts/_template/) to
-`layouts/my-layout/`, replaces the `{{slug}}` placeholder in file contents
-and names, and prints the next steps. For real layouts, start from a shipped
-Herdr layout or mod, clone it with `herdr-app do layout.clone` or
-`herdr-app do mod.clone`, then edit the copy.
+The generator copies [templates/layout/](templates/layout/) to
+`layouts/my-layout/`, moves `layout.json` to
+`layouts/my-layout/layouts/my-layout.json`, replaces the `{{slug}}`
+placeholder in file contents and names, and prints the next steps. For real
+layouts, start from a shipped Herdr layout or mod, clone it with
+`herdr-app do layout.clone` or `herdr-app do mod.clone`, then edit the copy.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the layout format, the naming
 rules, the verification checklist, the upgrade and drift notes, and the pull
@@ -66,9 +77,9 @@ request steps.
 
 ```
 layouts/
-  sweg/                   main SWEG layout
-  sweg-sidebar/           older sidebar variant
-  _template/              starting point for a new layout
+  sweg/                   the only published layout
+templates/
+  layout/                 starting point for a new layout, not published
 scripts/
   new-layout.py           template -> layouts/<slug>/
 docs/
