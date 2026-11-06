@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Create a layout folder from layouts/_template.
+"""Create a layout folder from templates/layout.
 
 Usage:
     python3 scripts/new-layout.py <slug>
 
 The slug is the layout name. It must match ^[a-z][a-z0-9-]{1,31}$ and
 layouts/<slug>/ must not exist yet. The script copies the template to
-layouts/<slug>/ and replaces the {{slug}} placeholder in file contents and in
-file and folder names.
+layouts/<slug>/, moves layout.json to layouts/<slug>/layouts/<slug>.json, and
+replaces the {{slug}} placeholder in file contents and in file and folder
+names.
 """
 
 import re
@@ -18,7 +19,8 @@ from pathlib import Path
 PLACEHOLDER = "{{slug}}"
 SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE = ROOT / "layouts" / "_template"
+TEMPLATE = ROOT / "templates" / "layout"
+LAYOUT_FILE = "layout.json"
 
 USAGE = "usage: python3 scripts/new-layout.py <slug>"
 
@@ -40,14 +42,18 @@ Next steps:
 """
 
 
+def target_for(relative, slug):
+    if relative.as_posix() == LAYOUT_FILE:
+        return ROOT / "layouts" / slug / "layouts" / f"{slug}.json"
+    parts = [part.replace(PLACEHOLDER, slug) for part in relative.parts]
+    return (ROOT / "layouts" / slug).joinpath(*parts)
+
+
 def copy_template(slug):
     data = PLACEHOLDER.encode()
     name = slug.encode()
-    target_root = ROOT / "layouts" / slug
     for source in sorted(TEMPLATE.rglob("*")):
-        relative = source.relative_to(TEMPLATE)
-        parts = [part.replace(PLACEHOLDER, slug) for part in relative.parts]
-        target = target_root.joinpath(*parts)
+        target = target_for(source.relative_to(TEMPLATE), slug)
         if source.is_dir():
             target.mkdir(parents=True, exist_ok=True)
             continue

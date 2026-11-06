@@ -4,6 +4,9 @@ A starting point for a Herdr layout. A layout folder holds the layout tree,
 the mods the layout adds, the keys it expects, a recipe and a screenshot.
 Read `CONTRIBUTING.md` in the repo root first.
 
+This folder is not a published layout: it keeps its tree in `layout.json`
+instead of `layouts/<name>.json`, so the Herdr gallery does not list it.
+
 ## Create the layout
 
 From the repo root:
@@ -12,19 +15,23 @@ From the repo root:
 python3 scripts/new-layout.py <slug>
 ```
 
-The generator copies this folder to `layouts/<slug>/`, replaces the template
-placeholder in file contents and in file and folder names, and prints the next
-steps. It refuses an invalid slug and a folder that already exists.
+The generator copies this folder to `layouts/<slug>/`, moves `layout.json` to
+`layouts/<slug>/layouts/<slug>.json`, replaces the template placeholder in
+file contents and in file and folder names, and prints the next steps. It
+refuses an invalid slug and a folder that already exists.
 
 To do it by hand:
 
 ```
-cp -R layouts/_template layouts/<slug>
+cp -R templates/layout layouts/<slug>
+mkdir -p layouts/<slug>/layouts
+mv layouts/<slug>/layout.json layouts/<slug>/layouts/<slug>.json
+mv layouts/<slug>/mods/{{slug}}-example layouts/<slug>/mods/<slug>-example
 ```
 
-Then rename the copies and replace the placeholder in every file name, folder
-name and file content. The JSON files, the mod and the keys are small, so a
-text search for the placeholder is enough to find every hit.
+Then replace the placeholder in every remaining file name, folder name and
+file content. The JSON files, the mod and the keys are small, so a text
+search for the placeholder is enough to find every hit.
 
 ## What to edit
 
@@ -91,3 +98,5 @@ Herdr reloads a mod when its files change. If the window shows an error, run
 - Every mod passes `herdr-app check`.
 - The layout shows after `layout.switch` with no layout error file.
 - `preview.png` shows the real window, and `RECIPE.md` has no `<...>` left.
+- `git ls-files | grep -E '(^|/)layouts/[^/]+\.json$'` lists this layout and
+  no folder you do not mean to publish.
